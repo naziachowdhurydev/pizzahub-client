@@ -62,10 +62,10 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   }
 
   const inputClass =
-    "mt-2 w-full rounded-xl border border-[#E5E3DC] bg-[#F8F7F3] py-3 pl-11 pr-4 text-[#172B4D] outline-none transition placeholder:text-[#94A3B8] focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15";
+    "mt-2 w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15";
 
   return (
-    <section className="w-full max-w-md rounded-3xl border border-[#E5E3DC] bg-white p-7 text-[#172B4D] shadow-xl shadow-[#172B4D]/5 sm:p-9">
+    <section className="w-full max-w-md rounded-3xl border border-border bg-card p-7 text-card-foreground shadow-xl sm:p-9">
       <div className="mb-8 text-center">
         <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-[#F26B4F] text-white shadow-lg shadow-[#F26B4F]/20">
           <Pizza size={30} />
@@ -79,7 +79,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           {isRegister ? "Create your account" : "Welcome back!"}
         </h1>
 
-        <p className="mt-2 text-sm leading-6 text-[#64748B]">
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
           {isRegister
             ? "Join PizzaHub and order your favourite slices."
             : "Log in to continue enjoying your favourite pizza."}
@@ -93,7 +93,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             <div className="relative">
               <User
                 size={18}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8]"
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
               />
               <input
                 required
@@ -112,7 +112,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           <div className="relative">
             <Mail
               size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8]"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
             />
             <input
               required
@@ -130,7 +130,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           <div className="relative">
             <Lock
               size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8]"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
             />
             <input
               required
@@ -155,9 +155,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         </button>
       </form>
 
-      <div className="my-6 border-t border-[#E5E3DC]" />
+      <div className="my-6 border-t border-border" />
 
-      <p className="text-center text-sm text-[#64748B]">
+      <p className="text-center text-sm text-muted-foreground">
         {isRegister ? "Already have an account?" : "New to PizzaHub?"}{" "}
         <Link
           className="font-bold text-[#F26B4F] transition hover:text-[#E85C40]"

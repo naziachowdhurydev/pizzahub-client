@@ -80,7 +80,7 @@ export default function AdminPage() {
   if (sessionPending || (isAdmin && loading)) {
     return (
       <main className="mx-auto flex min-h-[65vh] max-w-7xl items-center justify-center px-5">
-        <p className="flex items-center gap-3 text-stone-500">
+        <p className="flex items-center gap-3 text-muted-foreground">
           <LoaderCircle className="animate-spin" size={20} />
           Loading dashboard...
         </p>
@@ -93,7 +93,7 @@ export default function AdminPage() {
       <main className="mx-auto grid min-h-[65vh] max-w-3xl place-items-center px-5 py-16 text-center">
         <div>
           <h1 className="text-3xl font-black">Admin access required</h1>
-          <p className="mt-3 text-stone-500">Log in with an administrator account to manage the menu.</p>
+          <p className="mt-3 text-muted-foreground">Log in with an administrator account to manage the menu.</p>
           <Link href="/login" className="mt-6 inline-flex rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white">
             Log in
           </Link>
@@ -107,8 +107,8 @@ export default function AdminPage() {
       <main className="mx-auto grid min-h-[65vh] max-w-3xl place-items-center px-5 py-16 text-center">
         <div>
           <h1 className="text-3xl font-black">You don’t have admin access</h1>
-          <p className="mt-3 text-stone-500">This dashboard is only available to PizzaHub administrators.</p>
-          <Link href="/menu" className="mt-6 inline-flex rounded-xl border border-[#E5E3DC] px-5 py-3 font-semibold">
+          <p className="mt-3 text-muted-foreground">This dashboard is only available to PizzaHub administrators.</p>
+          <Link href="/menu" className="mt-6 inline-flex rounded-xl border border-border px-5 py-3 font-semibold">
             Back to menu
           </Link>
         </div>
@@ -136,9 +136,9 @@ export default function AdminPage() {
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#F26B4F]">PizzaHub management</p>
           <h1 className="mt-2 text-4xl font-black tracking-tight">Admin dashboard</h1>
-          <p className="mt-2 text-stone-500">Manage menu prices and availability. Updates appear on the menu.</p>
+          <p className="mt-2 text-muted-foreground">Manage menu prices and availability. Updates appear on the menu.</p>
         </div>
-        <Link href="/menu" className="rounded-xl border border-[#E5E3DC] bg-white px-4 py-2.5 text-sm font-semibold transition hover:border-[#F26B4F]">
+        <Link href="/menu" className="rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold transition hover:border-[#F26B4F]">
           View customer menu
         </Link>
       </div>
@@ -150,9 +150,9 @@ export default function AdminPage() {
           { label: "Featured", value: featuredCount, icon: Star },
           { label: "Categories", value: categoryCount, icon: Tags },
         ].map(({ label, value, icon: Icon }) => (
-          <article key={label} className="rounded-2xl border border-[#E5E3DC] bg-white p-5 shadow-sm">
+          <article key={label} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-stone-500">{label}</p>
+              <p className="text-sm font-medium text-muted-foreground">{label}</p>
               <Icon size={19} className="text-[#F26B4F]" />
             </div>
             <p className="mt-3 text-3xl font-black">{value}</p>
@@ -160,20 +160,20 @@ export default function AdminPage() {
         ))}
       </section>
 
-      <section className="mt-8 overflow-hidden rounded-2xl border border-[#E5E3DC] bg-white shadow-sm">
-        <div className="border-b border-[#E5E3DC] px-5 py-4">
+      <section className="mt-8 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="border-b border-border px-5 py-4">
           <h2 className="text-lg font-bold">Menu products</h2>
-          <p className="mt-1 text-sm text-stone-500">Edit a price and save, or change a product’s availability or featured status.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Edit a price and save, or change a product’s availability or featured status.</p>
         </div>
 
         {error ? (
           <p role="alert" className="m-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>
         ) : products.length === 0 ? (
-          <p className="p-8 text-center text-stone-500">No products found. Run <code className="text-[#D95338]">npm run seed:data</code> in the server folder to add demo menu data.</p>
+          <p className="p-8 text-center text-muted-foreground">No products found. Run <code className="text-[#D95338]">npm run seed:data</code> in the server folder to add demo menu data.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="bg-[#F8F7F3] text-xs uppercase tracking-wide text-stone-500">
+              <thead className="bg-muted text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Product</th>
                   <th className="px-5 py-3 font-semibold">Price</th>
@@ -189,7 +189,7 @@ export default function AdminPage() {
                     <tr key={product._id} className="align-middle">
                       <td className="px-5 py-4">
                         <p className="font-bold">{product.name}</p>
-                        <p className="mt-1 text-xs text-stone-500">{product.category}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{product.category}</p>
                       </td>
                       <td className="px-5 py-4">
                         <form
@@ -200,7 +200,7 @@ export default function AdminPage() {
                           }}
                         >
                           <label className="sr-only" htmlFor={`price-${product._id}`}>Price for {product.name}</label>
-                          <span className="text-stone-500">৳</span>
+                          <span className="text-muted-foreground">৳</span>
                           <input
                             id={`price-${product._id}`}
                             type="number"
@@ -213,12 +213,12 @@ export default function AdminPage() {
                                 [product._id]: event.target.value,
                               }))
                             }
-                            className="w-28 rounded-lg border border-[#E5E3DC] bg-white px-3 py-2 outline-none focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15"
+                            className="w-28 rounded-lg border border-border bg-background px-3 py-2 outline-none focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15"
                           />
                         </form>
                       </td>
                       <td className="px-5 py-4">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${product.isAvailable ? "bg-green-50 text-green-700" : "bg-stone-100 text-stone-600"}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${product.isAvailable ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300" : "bg-muted text-muted-foreground"}`}>
                           {product.isAvailable ? "Available" : "Unavailable"}
                         </span>
                       </td>
@@ -237,7 +237,7 @@ export default function AdminPage() {
                             type="button"
                             disabled={savingId !== null}
                             onClick={() => void updateProduct(product, { isAvailable: !product.isAvailable })}
-                            className="rounded-lg border border-[#E5E3DC] px-3 py-2 text-xs font-semibold transition hover:border-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:border-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {product.isAvailable ? "Disable" : "Enable"}
                           </button>
@@ -245,7 +245,7 @@ export default function AdminPage() {
                             type="button"
                             disabled={savingId !== null}
                             onClick={() => void updateProduct(product, { isFeatured: !product.isFeatured })}
-                            className="rounded-lg border border-[#E5E3DC] px-3 py-2 text-xs font-semibold transition hover:border-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:border-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {product.isFeatured ? "Unfeature" : "Feature"}
                           </button>
