@@ -19,8 +19,13 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
 
   const user = session?.user;
-  const isAdmin =
-    (user as (typeof user & { role?: string }) | null)?.role === "admin";
+  const userRole =
+    (user as (typeof user & { role?: string }) | null)?.role ?? "customer";
+  const isAdmin = userRole === "admin";
+  const dashboardHref =
+    userRole === "admin" || userRole === "vendor"
+      ? `/dashboard/${userRole}`
+      : "/dashboard/customer";
 
   const links = [
     { href: "/", label: "Home" },
@@ -59,9 +64,18 @@ export function SiteHeader() {
             </Link>
           ))}
 
+          {user && !isAdmin && (
+            <Link
+              href={dashboardHref}
+              className="text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
+            >
+              Dashboard
+            </Link>
+          )}
+
           {isAdmin && (
             <Link
-              href="/admin"
+              href="/dashboard/admin"
               className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
             >
               <LayoutDashboard size={17} />
@@ -158,9 +172,19 @@ export function SiteHeader() {
               </Link>
             ))}
 
+            {user && !isAdmin && (
+              <Link
+                href={dashboardHref}
+                onClick={() => setOpen(false)}
+                className="font-semibold text-foreground hover:text-[#F26B4F]"
+              >
+                Dashboard
+              </Link>
+            )}
+
             {isAdmin && (
               <Link
-                href="/admin"
+                href="/dashboard/admin"
                 onClick={() => setOpen(false)}
                 className="font-semibold text-foreground hover:text-[#F26B4F]"
               >
