@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BarChart3, Package, Store, Users } from "lucide-react";
+import { BarChart3, ClipboardList, Package, Store, Users } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
+import { useCurrentUser } from "@/lib/use-current-user";
 
 type UserAccount = {
   _id?: string;
@@ -13,6 +14,8 @@ type UserAccount = {
   name: string;
   email: string;
   role: "customer" | "vendor" | "admin";
+  vendorStatus?: "not_applied" | "pending" | "approved" | "rejected";
+  status?: "active" | "suspended";
   createdAt?: string;
 };
 
@@ -43,16 +46,28 @@ type VendorApplication = {
 
 type Analytics = {
   users: number;
+  customers: number;
   vendors: number;
+  pendingVendors: number;
   products: number;
   totalOrders: number;
   completedRevenue: number;
   ordersByStatus: Record<string, number>;
 };
 
+type AdminOrder = {
+  _id: string;
+  customerName: string;
+  status: string;
+  createdAt: string;
+  total: number;
+  items: Array<{ name: string; quantity: number; price: number }>;
+};
+
 const sections = [
   { id: "users", label: "Users", icon: Users },
   { id: "vendors", label: "Vendors", icon: Store },
+  { id: "orders", label: "Orders", icon: ClipboardList },
   { id: "products", label: "All Products", icon: Package },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
 ] as const;
@@ -60,9 +75,11 @@ const sections = [
 type Section = (typeof sections)[number]["id"];
 
 function AdminDashboardContent() {
+  const { user: currentUser } = useCurrentUser();
   const [section, setSection] = useState<Section>("analytics");
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [applications, setApplications] = useState<VendorApplication[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -75,14 +92,16 @@ function AdminDashboardContent() {
     let active = true;
     Promise.all([
       apiFetch<UserAccount[]>("/admin/users"),
-      apiFetch<VendorApplication[]>("/admin/vendors/applications"),
+      apiFetch<VendorApplication[]>("/admin/vendors/pending"),
       apiFetch<Analytics>("/admin/analytics"),
+      apiFetch<AdminOrder[]>("/orders/admin/all"),
     ])
-      .then(([platformUsers, vendorApplications, platformAnalytics]) => {
+      .then(([platformUsers, vendorApplications, platformAnalytics, platformOrders]) => {
         if (!active) return;
         setUsers(platformUsers);
         setApplications(vendorApplications);
         setAnalytics(platformAnalytics);
+        setOrders(platformOrders);
       })
       .catch((cause: unknown) => {
         if (!active) return;
@@ -152,11 +171,20 @@ function AdminDashboardContent() {
     setReviewingId(application._id);
     try {
       const updated = await apiFetch<VendorApplication>(
-        `/admin/vendors/applications/${application._id}`,
-        { method: "PATCH", body: JSON.stringify({ status }) },
+        `/admin/vendors/${application._id}/${status}`,
+        { method: "PATCH" },
       );
-      setApplications((current) =>
-        current.map((item) => (item._id === application._id ? updated : item)),
+      setApplications((current) => current.filter((item) => item._id !== updated._id));
+      setUsers((current) =>
+        current.map((user) =>
+          (user.id ?? user._id) === application.userId
+            ? {
+                ...user,
+                role: status === "approved" ? "vendor" : user.role,
+                vendorStatus: status,
+              }
+            : user,
+        ),
       );
       toast.success(
         status === "approved"
@@ -169,6 +197,49 @@ function AdminDashboardContent() {
       );
     } finally {
       setReviewingId("");
+    }
+  }
+
+  async function changeAccountStatus(
+    user: UserAccount,
+    status: "active" | "suspended",
+  ) {
+    const userId = user.id ?? user._id;
+    if (!userId) {
+      toast.error("This account has no usable ID.");
+      return;
+    }
+    setSavingUserId(userId);
+    try {
+      const updated = await apiFetch<UserAccount>(
+        `/admin/users/${encodeURIComponent(userId)}/status`,
+        { method: "PATCH", body: JSON.stringify({ status }) },
+      );
+      setUsers((current) =>
+        current.map((item) =>
+          (item.id ?? item._id) === userId ? { ...item, ...updated } : item,
+        ),
+      );
+      toast.success(`${user.name}'s account is ${status}.`);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not update account status.");
+    } finally {
+      setSavingUserId("");
+    }
+  }
+
+  async function changeOrderStatus(order: AdminOrder, status: string) {
+    try {
+      await apiFetch<void>(`/orders/admin/${order._id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      setOrders((current) =>
+        current.map((item) => (item._id === order._id ? { ...item, status } : item)),
+      );
+      toast.success(`Order #${order._id.slice(-6)} updated.`);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not update order status.");
     }
   }
 
@@ -210,18 +281,20 @@ function AdminDashboardContent() {
               <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">No accounts found.</p>
             ) : (
               <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
-                <table className="w-full min-w-[600px] text-left text-sm">
+                <table className="w-full min-w-[760px] text-left text-sm">
                   <thead className="bg-muted text-xs uppercase text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3">Account</th>
                       <th className="px-4 py-3">Email</th>
                       <th className="px-4 py-3">Role</th>
+                      <th className="px-4 py-3">Account status</th>
                       <th className="px-4 py-3">Details</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {users.map((user) => {
                       const userId = user.id ?? user._id ?? "";
+                      const isCurrentAdmin = userId === currentUser?.id;
                       return (
                         <tr key={userId || user.email}>
                           <td className="px-4 py-3 font-semibold">{user.name}</td>
@@ -229,7 +302,7 @@ function AdminDashboardContent() {
                           <td className="px-4 py-3">
                             <select
                               value={user.role}
-                              disabled={!userId || savingUserId === userId}
+                              disabled={!userId || savingUserId === userId || isCurrentAdmin}
                               onChange={(event) =>
                                 void changeRole(user, event.target.value as UserAccount["role"])
                               }
@@ -237,8 +310,27 @@ function AdminDashboardContent() {
                               className="rounded-lg border border-border bg-background px-3 py-2 capitalize outline-none focus:border-[#F26B4F] disabled:opacity-60"
                             >
                               <option value="customer">Customer</option>
-                              <option value="vendor">Vendor</option>
+                              {(user.role === "vendor" || user.vendorStatus === "approved") && (
+                                <option value="vendor">Vendor</option>
+                              )}
                               <option value="admin">Admin</option>
+                            </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <select
+                              value={user.status ?? "active"}
+                              disabled={!userId || savingUserId === userId || isCurrentAdmin}
+                              onChange={(event) =>
+                                void changeAccountStatus(
+                                  user,
+                                  event.target.value as "active" | "suspended",
+                                )
+                              }
+                              aria-label={`Account status for ${user.name}`}
+                              className="rounded-lg border border-border bg-background px-3 py-2 capitalize outline-none focus:border-[#F26B4F] disabled:opacity-60"
+                            >
+                              <option value="active">Active</option>
+                              <option value="suspended">Suspended</option>
                             </select>
                           </td>
                           <td className="px-4 py-3">
@@ -357,6 +449,45 @@ function AdminDashboardContent() {
           </section>
         )}
 
+        {section === "orders" && (
+          <section>
+            <h2 className="text-2xl font-black">All orders</h2>
+            <p className="mt-1 text-muted-foreground">Review orders and update their overall fulfillment status.</p>
+            {orders.length === 0 ? (
+              <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">No orders yet.</p>
+            ) : (
+              <div className="mt-6 grid gap-4">
+                {orders.map((order) => (
+                  <article key={order._id} className="rounded-2xl border border-border bg-card p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-bold">Order #{order._id.slice(-6)} · {order.customerName}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {new Date(order.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <select
+                        value={order.status}
+                        onChange={(event) => void changeOrderStatus(order, event.target.value)}
+                        aria-label={`Order status for ${order._id}`}
+                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm capitalize"
+                      >
+                        {["pending", "confirmed", "preparing", "out_for_delivery", "delivered", "cancelled"].map((status) => (
+                          <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      {order.items.map((item) => `${item.name} × ${item.quantity}`).join(", ")}
+                    </p>
+                    <p className="mt-3 font-bold">৳{order.total}</p>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {section === "products" && (
           <section className="rounded-2xl border border-border bg-card p-6">
             <h2 className="text-2xl font-black">All Products</h2>
@@ -374,7 +505,9 @@ function AdminDashboardContent() {
             <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {[
                 ["Users", analytics.users],
+                ["Customers", analytics.customers],
                 ["Vendors", analytics.vendors],
+                ["Pending vendor applications", analytics.pendingVendors],
                 ["Products", analytics.products],
                 ["All orders", analytics.totalOrders],
                 ["Completed revenue", `৳${analytics.completedRevenue}`],

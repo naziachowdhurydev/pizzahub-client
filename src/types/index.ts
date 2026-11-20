@@ -15,3 +15,27 @@ export type Product = {
   allergens?: string[];
   preparationTime?: string;
 };
+
+export type UserRole = "customer" | "vendor" | "admin";
+
+export type CurrentUser = {
+  id: string;
+  name: string;
+  email: string;
+  image?: string | null;
+  role: UserRole;
+  status?: "active" | "suspended";
+  vendorStatus?: "not_applied" | "pending" | "approved" | "rejected";
+  vendorAppliedAt?: string;
+  vendorApprovedAt?: string;
+};
+
+export type CurrentUserProfile = {
+  user: CurrentUser;
+  session: {
+    id: string;
+    expiresAt: string;
+    createdAt: string;
+    updatedAt?: string;
+  } | null;
+};

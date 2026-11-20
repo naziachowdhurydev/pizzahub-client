@@ -14,7 +14,12 @@ type Order = {
   status: string;
   total: number;
   createdAt: string;
-  items: Array<{ name: string; quantity: number; price: number }>;
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    status?: string;
+  }>;
 };
 
 type Address = {
@@ -130,7 +135,7 @@ function CustomerDashboardContent() {
     setSavingApplication(true);
     try {
       const submitted = await apiFetch<VendorApplication>(
-        "/customer/vendor-application",
+        "/vendors/apply",
         {
           method: "POST",
           body: JSON.stringify({ storeName, description: storeDescription }),
@@ -201,9 +206,16 @@ function CustomerDashboardContent() {
                         {order.status.replaceAll("_", " ")}
                       </span>
                     </div>
-                    <p className="mt-4 text-sm text-muted-foreground">
-                      {order.items.map((item) => `${item.name} × ${item.quantity}`).join(", ")}
-                    </p>
+                    <ul className="mt-4 grid gap-2 text-sm text-muted-foreground">
+                      {order.items.map((item, index) => (
+                        <li key={`${item.name}-${index}`} className="flex flex-wrap justify-between gap-2">
+                          <span>{item.name} × {item.quantity}</span>
+                          {item.status && (
+                            <span className="capitalize">{item.status.replaceAll("_", " ")}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
                     <p className="mt-3 font-bold">৳{order.total}</p>
                   </article>
                 ))}

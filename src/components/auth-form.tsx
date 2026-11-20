@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { getCurrentUser } from "@/lib/api";
+import { dashboardPathForRole } from "@/lib/roles";
 import { Pizza, Mail, Lock, User, ArrowRight } from "lucide-react";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
@@ -20,6 +22,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
+    let authenticationCompleted = false;
 
     try {
       if (isRegister) {
@@ -35,8 +38,6 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         if (result.error) {
           throw new Error(result.error.message || "Registration failed");
         }
-
-        toast.success("Account created. Welcome to PizzaHub!");
       } else {
         const result = await authClient.signIn.email({
           email,
@@ -46,15 +47,20 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         if (result.error) {
           throw new Error(result.error.message || "Login failed");
         }
-
-        toast.success("Welcome back!");
       }
 
-      router.push("/profile");
+      authenticationCompleted = true;
+      const { user } = await getCurrentUser();
+      toast.success(isRegister ? "Account created. Welcome to PizzaHub!" : "Welcome back!");
+      router.push(dashboardPathForRole(user.role));
       router.refresh();
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Something went wrong";
       toast.error(
-        error instanceof Error ? error.message : "Something went wrong",
+        authenticationCompleted
+          ? `${isRegister ? "Your account was created" : "You were signed in"}, but we couldn't load your account role: ${message}`
+          : message,
       );
     } finally {
       setBusy(false);

@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client";
+import { dashboardPathForRole } from "@/lib/roles";
+import { useCurrentUser } from "@/lib/use-current-user";
 
 type DashboardRole = "customer" | "vendor" | "admin";
 
@@ -13,15 +14,30 @@ export function DashboardAccess({
   role: DashboardRole;
   children: ReactNode;
 }) {
-  const { data: session, isPending } = authClient.useSession();
-  const user = session?.user;
-  const userRole =
-    (user as (typeof user & { role?: string }) | null)?.role ?? "customer";
+  const { user, loading, error, retry } = useCurrentUser();
 
-  if (isPending) {
+  if (loading) {
     return (
       <main className="mx-auto grid min-h-[65vh] max-w-7xl place-items-center px-5 text-muted-foreground">
         Loading your dashboard...
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="mx-auto grid min-h-[65vh] max-w-3xl place-items-center px-5 py-16 text-center">
+        <div>
+          <h1 className="text-3xl font-black">We couldn’t verify your account</h1>
+          <p role="alert" className="mt-3 text-muted-foreground">{error.message}</p>
+          <button
+            type="button"
+            onClick={retry}
+            className="mt-6 rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white"
+          >
+            Try again
+          </button>
+        </div>
       </main>
     );
   }
@@ -40,16 +56,16 @@ export function DashboardAccess({
     );
   }
 
-  if (userRole !== role) {
+  if (user.role !== role) {
     return (
       <main className="mx-auto grid min-h-[65vh] max-w-3xl place-items-center px-5 py-16 text-center">
         <div>
           <h1 className="text-3xl font-black">This dashboard isn’t available to your account</h1>
           <p className="mt-3 text-muted-foreground">
-            Your account role is {userRole}. Contact an administrator if this is incorrect.
+            Your account role is {user.role}. Contact an administrator if this is incorrect.
           </p>
           <Link
-            href={`/dashboard/${userRole === "admin" || userRole === "vendor" ? userRole : "customer"}`}
+            href={dashboardPathForRole(user.role)}
             className="mt-6 inline-flex rounded-xl border border-border px-5 py-3 font-semibold"
           >
             Go to my dashboard

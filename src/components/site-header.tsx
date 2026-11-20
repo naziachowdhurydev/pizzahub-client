@@ -14,6 +14,8 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { apiFetch } from "@/lib/api";
+import { dashboardPathForRole } from "@/lib/roles";
+import { useCurrentUser } from "@/lib/use-current-user";
 import { CART_UPDATED_EVENT } from "@/lib/cart-events";
 import { toast } from "sonner";
 
@@ -23,22 +25,22 @@ type CartSummary = {
 
 export function SiteHeader() {
   const { data: session, isPending } = authClient.useSession();
+  const { user: currentUser, loading: currentUserLoading } = useCurrentUser();
   const [open, setOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
 
   const user = session?.user;
-  const userRole =
-    (user as (typeof user & { role?: string }) | null)?.role ?? "customer";
+  const userRole = currentUser?.role;
   const isAdmin = userRole === "admin";
-  const dashboardHref =
-    userRole === "admin" || userRole === "vendor"
-      ? `/dashboard/${userRole}`
-      : "/dashboard/customer";
+  const dashboardHref = userRole ? dashboardPathForRole(userRole) : undefined;
+  const dashboardLabel = userRole
+    ? `${userRole[0].toUpperCase()}${userRole.slice(1)} Dashboard`
+    : "Dashboard";
   const userId = (user as (typeof user & { id?: string }) | null)?.id;
 
   useEffect(() => {
     let active = true;
-    if (isPending || !user || userRole !== "customer") return;
+    if (isPending || currentUserLoading || !user || userRole !== "customer") return;
 
     async function refreshCartCount() {
       try {
@@ -63,7 +65,7 @@ export function SiteHeader() {
       window.removeEventListener(CART_UPDATED_EVENT, handleCartUpdate);
       window.removeEventListener("focus", handleCartUpdate);
     };
-  }, [isPending, user, userId, userRole]);
+  }, [currentUserLoading, isPending, user, userId, userRole]);
 
   const links = [
     { href: "/", label: "Home" },
@@ -102,12 +104,12 @@ export function SiteHeader() {
             </Link>
           ))}
 
-          {user && !isAdmin && (
+          {user && dashboardHref && !isAdmin && (
             <Link
               href={dashboardHref}
               className="text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
             >
-              Dashboard
+              {dashboardLabel}
             </Link>
           )}
 
@@ -159,6 +161,11 @@ export function SiteHeader() {
                 <span className="text-sm font-semibold text-foreground">
                   {user.name}
                 </span>
+                {userRole && (
+                  <span className="rounded-full bg-[#F26B4F]/10 px-2 py-1 text-[10px] font-bold uppercase text-[#F26B4F]">
+                    {userRole}
+                  </span>
+                )}
               </Link>
 
               <button
@@ -215,13 +222,13 @@ export function SiteHeader() {
               </Link>
             ))}
 
-            {user && !isAdmin && (
+            {user && dashboardHref && !isAdmin && (
               <Link
                 href={dashboardHref}
                 onClick={() => setOpen(false)}
                 className="font-semibold text-foreground hover:text-[#F26B4F]"
               >
-                Dashboard
+                {dashboardLabel}
               </Link>
             )}
 
@@ -254,7 +261,7 @@ export function SiteHeader() {
                     onClick={() => setOpen(false)}
                     className="font-semibold text-foreground"
                   >
-                    My Profile
+                    My Profile{userRole ? ` · ${userRole}` : ""}
                   </Link>
 
                   <button

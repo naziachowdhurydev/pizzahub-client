@@ -10,10 +10,31 @@ import type { Product } from "@/types";
 
 type VendorOrder = {
   _id: string;
-  customerName: string;
   status: string;
   createdAt: string;
-  items: Array<{ name: string; price: number; quantity: number }>;
+  items: Array<{
+    productId: string;
+    name: string;
+    price: number;
+    quantity: number;
+    status: string;
+  }>;
+};
+
+type VendorOrderStatus =
+  | "confirmed"
+  | "preparing"
+  | "out_for_delivery"
+  | "delivered"
+  | "cancelled";
+
+const vendorStatusTransitions: Record<string, VendorOrderStatus[]> = {
+  pending: ["confirmed", "cancelled"],
+  confirmed: ["preparing", "cancelled"],
+  preparing: ["out_for_delivery", "cancelled"],
+  out_for_delivery: ["delivered"],
+  delivered: [],
+  cancelled: [],
 };
 
 type SalesSummary = {
@@ -82,6 +103,7 @@ function VendorDashboardContent() {
   const [loading, setLoading] = useState(true);
   const [savingProduct, setSavingProduct] = useState(false);
   const [savingStore, setSavingStore] = useState(false);
+  const [savingOrderItem, setSavingOrderItem] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -194,6 +216,32 @@ function VendorDashboardContent() {
     }
   }
 
+  async function updateOrderItemStatus(
+    order: VendorOrder,
+    item: VendorOrder["items"][number],
+    status: VendorOrderStatus,
+  ) {
+    const key = `${order._id}:${item.productId}`;
+    setSavingOrderItem(key);
+    try {
+      const updated = await apiFetch<VendorOrder>(
+        `/vendor/orders/${order._id}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ productId: item.productId, status }),
+        },
+      );
+      setOrders((current) =>
+        current.map((entry) => (entry._id === updated._id ? updated : entry)),
+      );
+      toast.success("Order item status updated.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not update order status.");
+    } finally {
+      setSavingOrderItem("");
+    }
+  }
+
   if (loading) {
     return <p className="py-16 text-center text-muted-foreground">Loading your store...</p>;
   }
@@ -280,10 +328,42 @@ function VendorDashboardContent() {
                 {orders.map((order) => (
                   <article key={order._id} className="rounded-2xl border border-border bg-card p-5">
                     <div className="flex flex-wrap justify-between gap-2">
-                      <h3 className="font-bold">Order #{order._id.slice(-6)} · {order.customerName}</h3>
+                      <h3 className="font-bold">Order #{order._id.slice(-6)}</h3>
                       <span className="text-sm font-semibold capitalize text-[#F26B4F]">{order.status.replaceAll("_", " ")}</span>
                     </div>
-                    <p className="mt-2 text-sm text-muted-foreground">{order.items.map((item) => `${item.name} × ${item.quantity}`).join(", ")}</p>
+                    <div className="mt-4 grid gap-3">
+                      {order.items.map((item, index) => {
+                        const currentStatus = item.status || order.status;
+                        const nextStatuses = vendorStatusTransitions[currentStatus] ?? [];
+                        const key = `${order._id}:${item.productId}`;
+                        return (
+                          <div key={`${item.productId}-${index}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/50 p-3">
+                            <div>
+                              <p className="font-semibold">{item.name} × {item.quantity}</p>
+                              <p className="text-xs capitalize text-muted-foreground">{currentStatus.replaceAll("_", " ")}</p>
+                            </div>
+                            <select
+                              value={currentStatus}
+                              disabled={savingOrderItem === key || nextStatuses.length === 0}
+                              onChange={(event) =>
+                                void updateOrderItemStatus(
+                                  order,
+                                  item,
+                                  event.target.value as VendorOrderStatus,
+                                )
+                              }
+                              aria-label={`Status for ${item.name}`}
+                              className="rounded-lg border border-border bg-background px-3 py-2 text-sm capitalize disabled:opacity-60"
+                            >
+                              <option value={currentStatus}>{currentStatus.replaceAll("_", " ")}</option>
+                              {nextStatuses.map((status) => (
+                                <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
                     <p className="mt-3 text-sm font-bold">Your items: ৳{order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)}</p>
                   </article>
                 ))}
