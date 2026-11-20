@@ -58,12 +58,10 @@ export function SiteHeader() {
     const handleCartUpdate = () => void refreshCartCount();
     void refreshCartCount();
     window.addEventListener(CART_UPDATED_EVENT, handleCartUpdate);
-    window.addEventListener("focus", handleCartUpdate);
 
     return () => {
       active = false;
       window.removeEventListener(CART_UPDATED_EVENT, handleCartUpdate);
-      window.removeEventListener("focus", handleCartUpdate);
     };
   }, [currentUserLoading, isPending, user, userId, userRole]);
 

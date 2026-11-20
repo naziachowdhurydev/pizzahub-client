@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
-import { BarChart3, ClipboardList, Package, Store } from "lucide-react";
+import { BarChart3, ClipboardList, Package, RefreshCw, Store } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DashboardAccess } from "@/components/dashboard-access";
@@ -12,12 +13,20 @@ import type { Product } from "@/types";
 type VendorOrder = {
   _id: string;
   status: string;
-  createdAt: string;
+  createdAt?: string;
+  customerName: string;
+  deliveryAddress: string;
+  phone: string;
+  vendorTotal: number;
   items: Array<{
+    itemId: string;
     productId: string;
     name: string;
+    size: string;
+    image: string;
     price: number;
     quantity: number;
+    subtotal: number;
     status: string;
   }>;
 };
@@ -27,10 +36,11 @@ type VendorOrderStatus =
   | "preparing"
   | "out_for_delivery"
   | "delivered"
-  | "cancelled";
+  | "cancelled"
+  | "rejected";
 
 const vendorStatusTransitions: Record<string, VendorOrderStatus[]> = {
-  pending: ["confirmed", "cancelled"],
+  pending: ["confirmed", "rejected"],
   confirmed: ["preparing", "cancelled"],
   preparing: ["out_for_delivery", "cancelled"],
   out_for_delivery: ["delivered"],
@@ -108,7 +118,9 @@ function VendorDashboardContent() {
   const [savingProduct, setSavingProduct] = useState(false);
   const [removingProductId, setRemovingProductId] = useState("");
   const [savingStore, setSavingStore] = useState(false);
+  const [refreshingOrders, setRefreshingOrders] = useState(false);
   const [savingOrderItem, setSavingOrderItem] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState<"all" | VendorOrderStatus>("all");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -140,6 +152,18 @@ function VendorDashboardContent() {
       active = false;
     };
   }, []);
+
+  async function refreshOrders() {
+    setRefreshingOrders(true);
+    try {
+      setOrders(await apiFetch<VendorOrder[]>("/vendor/orders"));
+      toast.success("Orders are up to date.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not refresh orders.");
+    } finally {
+      setRefreshingOrders(false);
+    }
+  }
 
   function editProduct(product: Product) {
     setEditingId(product._id);
@@ -238,14 +262,14 @@ function VendorDashboardContent() {
     item: VendorOrder["items"][number],
     status: VendorOrderStatus,
   ) {
-    const key = `${order._id}:${item.productId}`;
+    const key = `${order._id}:${item.itemId}`;
     setSavingOrderItem(key);
     try {
       const updated = await apiFetch<VendorOrder>(
-        `/vendor/orders/${order._id}/status`,
+        `/vendor/orders/${order._id}/items/${item.itemId}/status`,
         {
           method: "PATCH",
-          body: JSON.stringify({ productId: item.productId, status }),
+          body: JSON.stringify({ status }),
         },
       );
       setOrders((current) =>
@@ -258,6 +282,12 @@ function VendorDashboardContent() {
       setSavingOrderItem("");
     }
   }
+
+  const filteredOrders = orders.filter(
+    (order) =>
+      orderStatusFilter === "all" ||
+      order.items.some((item) => item.status === orderStatusFilter),
+  );
 
   if (loading) {
     return <p className="py-16 text-center text-muted-foreground">Loading your store...</p>;
@@ -352,52 +382,158 @@ function VendorDashboardContent() {
 
         {section === "orders" && (
           <section>
-            <h2 className="text-2xl font-black">Orders</h2>
-            <p className="mt-1 text-muted-foreground">Orders that include products from your store.</p>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-black">Orders</h2>
+                <p className="mt-1 text-muted-foreground">Only orders containing your products are shown.</p>
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="grid gap-1.5 text-sm font-semibold">
+                  Filter by status
+                  <select
+                    value={orderStatusFilter}
+                    onChange={(event) =>
+                      setOrderStatusFilter(event.target.value as "all" | VendorOrderStatus)
+                    }
+                    className="rounded-xl border border-border bg-background px-3 py-2 font-normal capitalize"
+                  >
+                    <option value="all">All order history</option>
+                    {[
+                      "pending",
+                      "confirmed",
+                      "preparing",
+                      "out_for_delivery",
+                      "delivered",
+                      "rejected",
+                      "cancelled",
+                    ].map((status) => (
+                      <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={refreshingOrders}
+                  onClick={() => void refreshOrders()}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm font-semibold hover:border-[#F26B4F] disabled:opacity-60"
+                >
+                  <RefreshCw size={16} className={refreshingOrders ? "animate-spin" : ""} />
+                  {refreshingOrders ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
+            </div>
             {orders.length === 0 ? (
               <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">No orders for your products yet.</p>
+            ) : filteredOrders.length === 0 ? (
+              <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+                No orders match this status.
+              </p>
             ) : (
               <div className="mt-6 grid gap-3">
-                {orders.map((order) => (
+                {filteredOrders.map((order) => (
                   <article key={order._id} className="rounded-2xl border border-border bg-card p-5">
                     <div className="flex flex-wrap justify-between gap-2">
-                      <h3 className="font-bold">Order #{order._id.slice(-6)}</h3>
-                      <span className="text-sm font-semibold capitalize text-[#F26B4F]">{order.status.replaceAll("_", " ")}</span>
+                      <div>
+                        <h3 className="font-bold">Order #{order._id.slice(-6)}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {order.createdAt ? new Date(order.createdAt).toLocaleString() : "Date unavailable"}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-[#F26B4F]/10 px-3 py-1 text-xs font-bold capitalize text-[#F26B4F]">
+                        {order.status.replaceAll("_", " ")}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid gap-2 rounded-xl bg-muted/50 p-4 text-sm sm:grid-cols-2">
+                      <p><span className="text-muted-foreground">Customer: </span>{order.customerName || "Customer"}</p>
+                      <p><span className="text-muted-foreground">Phone: </span>{order.phone || "Not provided"}</p>
+                      <p className="sm:col-span-2"><span className="text-muted-foreground">Delivery address: </span>{order.deliveryAddress || "Not provided"}</p>
                     </div>
                     <div className="mt-4 grid gap-3">
-                      {order.items.map((item, index) => {
-                        const currentStatus = item.status || order.status;
+                      {order.items.map((item) => {
+                        const currentStatus = item.status;
                         const nextStatuses = vendorStatusTransitions[currentStatus] ?? [];
-                        const key = `${order._id}:${item.productId}`;
+                        const key = `${order._id}:${item.itemId}`;
                         return (
-                          <div key={`${item.productId}-${index}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/50 p-3">
-                            <div>
-                              <p className="font-semibold">{item.name} × {item.quantity}</p>
-                              <p className="text-xs capitalize text-muted-foreground">{currentStatus.replaceAll("_", " ")}</p>
+                          <div key={item.itemId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                              {item.image ? (
+                                <Image
+                                  src={item.image}
+                                  alt={item.name}
+                                  width={56}
+                                  height={56}
+                                  unoptimized
+                                  className="h-14 w-14 rounded-lg object-cover"
+                                />
+                              ) : (
+                                <span className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-muted">
+                                  <Package size={20} className="text-muted-foreground" />
+                                </span>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-semibold">{item.name} · {item.size} × {item.quantity}</p>
+                                <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  <span className="rounded-full bg-muted px-2 py-1 font-semibold capitalize text-foreground">
+                                    {currentStatus.replaceAll("_", " ")}
+                                  </span>
+                                  <span>৳{item.subtotal}</span>
+                                </p>
+                              </div>
                             </div>
-                            <select
-                              value={currentStatus}
-                              disabled={savingOrderItem === key || nextStatuses.length === 0}
-                              onChange={(event) =>
-                                void updateOrderItemStatus(
-                                  order,
-                                  item,
-                                  event.target.value as VendorOrderStatus,
-                                )
-                              }
-                              aria-label={`Status for ${item.name}`}
-                              className="rounded-lg border border-border bg-background px-3 py-2 text-sm capitalize disabled:opacity-60"
-                            >
-                              <option value={currentStatus}>{currentStatus.replaceAll("_", " ")}</option>
-                              {nextStatuses.map((status) => (
-                                <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
-                              ))}
-                            </select>
+                            <div className="flex flex-wrap gap-2">
+                              {currentStatus === "pending" ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={savingOrderItem === key}
+                                    onClick={() =>
+                                      void updateOrderItemStatus(order, item, "confirmed")
+                                    }
+                                    className="rounded-lg bg-green-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+                                  >
+                                    {savingOrderItem === key ? "Saving..." : "Accept"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={savingOrderItem === key}
+                                    onClick={() =>
+                                      void updateOrderItemStatus(order, item, "rejected")
+                                    }
+                                    className="rounded-lg border border-red-500/30 px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-60"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              ) : nextStatuses.length > 0 ? (
+                                <select
+                                  value={currentStatus}
+                                  disabled={savingOrderItem === key}
+                                  onChange={(event) =>
+                                    void updateOrderItemStatus(
+                                      order,
+                                      item,
+                                      event.target.value as VendorOrderStatus,
+                                    )
+                                  }
+                                  aria-label={`Status for ${item.name}`}
+                                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm capitalize disabled:opacity-60"
+                                >
+                                  <option value={currentStatus}>{currentStatus.replaceAll("_", " ")}</option>
+                                  {nextStatuses.map((status) => (
+                                    <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className="rounded-full bg-muted px-3 py-2 text-xs font-semibold capitalize text-muted-foreground">
+                                  {currentStatus.replaceAll("_", " ")}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
                     </div>
-                    <p className="mt-3 text-sm font-bold">Your items: ৳{order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)}</p>
+                    <p className="mt-3 text-sm font-bold">Your items total: ৳{order.vendorTotal}</p>
                   </article>
                 ))}
               </div>

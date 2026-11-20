@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { AlertTriangle, LoaderCircle, Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -13,24 +14,28 @@ import {
 type ConfirmDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  itemLabel?: string;
   itemName: string;
   title?: string;
   description?: string;
   confirmLabel?: string;
   pendingLabel?: string;
   pending?: boolean;
+  icon?: ReactNode;
   onConfirm: () => void;
 };
 
 export function ConfirmDialog({
   open,
   onOpenChange,
+  itemLabel = "Product",
   itemName,
   title = "Delete this product?",
   description = "This product will be removed from the menu and no longer be available to customers.",
   confirmLabel = "Delete product",
   pendingLabel = "Deleting product...",
   pending = false,
+  icon,
   onConfirm,
 }: ConfirmDialogProps) {
   return (
@@ -46,7 +51,7 @@ export function ConfirmDialog({
       >
         <div className="p-6 sm:p-7">
           <div className="flex size-14 items-center justify-center rounded-2xl border border-red-500/15 bg-red-500/10 text-red-600">
-            <Trash2 aria-hidden="true" size={25} strokeWidth={2.2} />
+            {icon ?? <Trash2 aria-hidden="true" size={25} strokeWidth={2.2} />}
           </div>
           <DialogHeader className="mt-5 gap-2 text-left">
             <DialogTitle className="text-xl font-black tracking-tight text-foreground">
@@ -65,7 +70,7 @@ export function ConfirmDialog({
             />
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Product
+                {itemLabel}
               </p>
               <p className="mt-1 break-words font-bold text-foreground">{itemName}</p>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">

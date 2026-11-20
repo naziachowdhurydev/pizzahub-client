@@ -20,10 +20,11 @@ type ProductChanges = Partial<
     | "image"
     | "isAvailable"
     | "isFeatured"
+    | "vendorId"
   >
 >;
 
-type ProductEditDraft = Omit<ProductChanges, "price"> & {
+type ProductEditDraft = Omit<ProductChanges, "price" | "vendorId"> & {
   name: string;
   slug: string;
   description: string;
@@ -32,6 +33,12 @@ type ProductEditDraft = Omit<ProductChanges, "price"> & {
   price: string;
   isAvailable: boolean;
   isFeatured: boolean;
+  vendorId: string;
+};
+
+type ApprovedVendor = {
+  id: string;
+  name: string;
 };
 
 export default function AdminPage() {
@@ -40,6 +47,7 @@ export default function AdminPage() {
   const isAdmin =
     (user as (typeof user & { role?: string }) | null)?.role === "admin";
   const [products, setProducts] = useState<Product[]>([]);
+  const [approvedVendors, setApprovedVendors] = useState<ApprovedVendor[]>([]);
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<ProductEditDraft | null>(null);
@@ -52,14 +60,21 @@ export default function AdminPage() {
     let active = true;
 
     if (sessionPending || !isAdmin) return;
-    apiFetch<Product[]>("/admin/products")
-      .then((data) => {
-        if (active) setProducts(data);
+    Promise.all([
+      apiFetch<Product[]>("/admin/products"),
+      apiFetch<ApprovedVendor[]>("/admin/vendors/approved"),
+    ])
+      .then(([data, vendors]) => {
+        if (!active) return;
+        setProducts(data);
+        setApprovedVendors(vendors);
       })
       .catch((cause: unknown) => {
         if (!active) return;
         const message =
-          cause instanceof Error ? cause.message : "Could not load products.";
+          cause instanceof Error
+            ? cause.message
+            : "Could not load products and approved vendors.";
         setError(message);
         toast.error(message);
       })
@@ -118,6 +133,7 @@ export default function AdminPage() {
       price: String(product.price),
       isAvailable: product.isAvailable,
       isFeatured: product.isFeatured,
+      vendorId: product.vendorId ?? "",
     });
   }
 
@@ -134,6 +150,7 @@ export default function AdminPage() {
 
     const updated = await updateProduct(product, {
       ...editDraft,
+      vendorId: editDraft.vendorId || null,
       price,
     });
     if (!updated) return;
@@ -373,6 +390,34 @@ export default function AdminPage() {
             />
             Featured item
           </label>
+          <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">
+            Product owner
+            <select
+              value={editDraft.vendorId}
+              onChange={(event) =>
+                setEditDraft((current) =>
+                  current ? { ...current, vendorId: event.target.value } : current,
+                )
+              }
+              className="rounded-xl border border-border bg-background px-3 py-2.5 font-normal"
+            >
+              <option value="">PizzaHub platform (unassigned)</option>
+              {editDraft.vendorId &&
+                !approvedVendors.some((vendor) => vendor.id === editDraft.vendorId) && (
+                  <option value={editDraft.vendorId}>
+                    Unverified vendor ({editDraft.vendorId})
+                  </option>
+                )}
+              {approvedVendors.map((vendor) => (
+                <option key={vendor.id} value={vendor.id}>
+                  {vendor.name || vendor.id}
+                </option>
+              ))}
+            </select>
+            <span className="font-normal text-muted-foreground">
+              Assign only to an approved vendor. Platform products are not shown in vendor order queues.
+            </span>
+          </label>
           <div className="flex gap-2 sm:col-span-2">
             <button
               type="submit"
@@ -428,6 +473,12 @@ export default function AdminPage() {
                           {product.name}
                         </Link>
                         <p className="mt-1 text-xs text-muted-foreground">{product.category}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Owner: {product.vendorId
+                            ? approvedVendors.find((vendor) => vendor.id === product.vendorId)?.name ??
+                              `Unverified vendor (${product.vendorId})`
+                            : "PizzaHub platform"}
+                        </p>
                       </td>
                       <td className="px-5 py-4">
                         <form

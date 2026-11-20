@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Heart, MapPin, PackageCheck, UserRound } from "lucide-react";
+import { CircleX, Heart, MapPin, PackageCheck, RefreshCw, UserRound } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -13,11 +14,19 @@ type Order = {
   _id: string;
   status: string;
   total: number;
-  createdAt: string;
+  subtotal?: number;
+  deliveryFee?: number;
+  deliveryAddress?: string;
+  phone?: string;
+  createdAt?: string;
   items: Array<{
+    itemId: string;
+    vendorId?: string | null;
+    size: string;
     name: string;
     quantity: number;
     price: number;
+    subtotal?: number;
     status?: string;
   }>;
 };
@@ -64,6 +73,11 @@ function CustomerDashboardContent() {
   const [loading, setLoading] = useState(true);
   const [savingAddress, setSavingAddress] = useState(false);
   const [savingApplication, setSavingApplication] = useState(false);
+  const [refreshingOrders, setRefreshingOrders] = useState(false);
+  const [cancellingOrderId, setCancellingOrderId] = useState("");
+  const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState("");
+  const [loadingOrderId, setLoadingOrderId] = useState("");
   const [storeName, setStoreName] = useState("");
   const [storeDescription, setStoreDescription] = useState("");
 
@@ -100,6 +114,58 @@ function CustomerDashboardContent() {
       active = false;
     };
   }, []);
+
+  async function toggleOrderDetails(order: Order) {
+    if (expandedOrderId === order._id) {
+      setExpandedOrderId("");
+      return;
+    }
+
+    setLoadingOrderId(order._id);
+    try {
+      const details = await apiFetch<Order>(`/orders/${order._id}`);
+      setOrders((current) =>
+        current.map((item) => (item._id === details._id ? details : item)),
+      );
+      setExpandedOrderId(order._id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load order details.");
+    } finally {
+      setLoadingOrderId("");
+    }
+  }
+
+  async function refreshOrders() {
+    setRefreshingOrders(true);
+    try {
+      setOrders(await apiFetch<Order[]>("/orders/my"));
+      toast.success("Your orders are up to date.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not refresh orders.");
+    } finally {
+      setRefreshingOrders(false);
+    }
+  }
+
+  async function cancelOrder() {
+    const order = orderToCancel;
+    if (!order) return;
+    setCancellingOrderId(order._id);
+    try {
+      const updated = await apiFetch<Order>(`/orders/${order._id}/cancel`, {
+        method: "PATCH",
+      });
+      setOrders((current) =>
+        current.map((item) => (item._id === updated._id ? updated : item)),
+      );
+      setOrderToCancel(null);
+      toast.success(`Order #${order._id.slice(-6)} was cancelled.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not cancel this order.");
+    } finally {
+      setCancellingOrderId("");
+    }
+  }
 
   async function saveAddress(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -182,8 +248,21 @@ function CustomerDashboardContent() {
       <div className="min-w-0">
         {section === "orders" && (
           <section>
-            <h2 className="text-2xl font-black">My Orders</h2>
-            <p className="mt-1 text-muted-foreground">Order history and current status.</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-black">My Orders</h2>
+                <p className="mt-1 text-muted-foreground">Order history and current status.</p>
+              </div>
+              <button
+                type="button"
+                disabled={refreshingOrders}
+                onClick={() => void refreshOrders()}
+                className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold hover:border-[#F26B4F] disabled:opacity-60"
+              >
+                <RefreshCw size={16} className={refreshingOrders ? "animate-spin" : ""} />
+                {refreshingOrders ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
             {orders.length === 0 ? (
               <div className="mt-6 rounded-2xl border border-dashed border-border p-8 text-center">
                 <p className="font-semibold">No orders yet</p>
@@ -199,24 +278,64 @@ function CustomerDashboardContent() {
                       <div>
                         <h3 className="font-bold">Order #{order._id.slice(-6)}</h3>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          {new Date(order.createdAt).toLocaleDateString()}
+                          {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "Date unavailable"}
                         </p>
                       </div>
                       <span className="rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold capitalize text-[#F26B4F]">
                         {order.status.replaceAll("_", " ")}
                       </span>
                     </div>
-                    <ul className="mt-4 grid gap-2 text-sm text-muted-foreground">
-                      {order.items.map((item, index) => (
-                        <li key={`${item.name}-${index}`} className="flex flex-wrap justify-between gap-2">
-                          <span>{item.name} × {item.quantity}</span>
-                          {item.status && (
-                            <span className="capitalize">{item.status.replaceAll("_", " ")}</span>
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                      <p className="font-bold">Total · ৳{order.total}</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={loadingOrderId === order._id}
+                          onClick={() => void toggleOrderDetails(order)}
+                          className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:border-[#F26B4F]"
+                        >
+                          {loadingOrderId === order._id
+                            ? "Loading..."
+                            : expandedOrderId === order._id
+                              ? "Hide details"
+                              : "Order details"}
+                        </button>
+                        {order.status === "pending" &&
+                          order.items.every((item) => (item.status ?? "pending") === "pending") && (
+                            <button
+                              type="button"
+                              onClick={() => setOrderToCancel(order)}
+                              className="rounded-lg border border-red-500/30 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-500/10"
+                            >
+                              Cancel order
+                            </button>
                           )}
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="mt-3 font-bold">৳{order.total}</p>
+                      </div>
+                    </div>
+                    {expandedOrderId === order._id && (
+                      <div className="mt-5 grid gap-4 border-t border-border pt-4">
+                        <div className="grid gap-1 text-sm sm:grid-cols-2">
+                          <p><span className="text-muted-foreground">Delivery address: </span>{order.deliveryAddress || "Not provided"}</p>
+                          <p><span className="text-muted-foreground">Phone: </span>{order.phone || "Not provided"}</p>
+                        </div>
+                        <div className="grid gap-2">
+                          {order.items.map((item, index) => (
+                            <div
+                              key={`${item.itemId}-${index}`}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/50 p-3 text-sm"
+                            >
+                              <div>
+                                <p className="font-semibold">{item.name} · {item.size} × {item.quantity}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Vendor item status: {(item.status ?? order.status).replaceAll("_", " ")}
+                                </p>
+                              </div>
+                              <p className="font-bold">৳{item.subtotal ?? item.price * item.quantity}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </article>
                 ))}
               </div>
@@ -355,6 +474,21 @@ function CustomerDashboardContent() {
           </section>
         )}
       </div>
+      <ConfirmDialog
+        open={orderToCancel !== null}
+        onOpenChange={(open) => {
+          if (!open && !cancellingOrderId) setOrderToCancel(null);
+        }}
+        itemLabel="Order"
+        itemName={orderToCancel ? `#${orderToCancel._id.slice(-6)}` : ""}
+        title="Cancel this order?"
+        description="You can cancel only while every item is still pending. Once a vendor accepts any item, cancellation is no longer available."
+        confirmLabel="Cancel order"
+        pendingLabel="Cancelling order..."
+        icon={<CircleX aria-hidden="true" size={25} strokeWidth={2.2} />}
+        pending={cancellingOrderId === orderToCancel?._id}
+        onConfirm={() => void cancelOrder()}
+      />
     </div>
   );
 }

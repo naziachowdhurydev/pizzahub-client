@@ -36,7 +36,7 @@ type UserDetails = {
 
 type VendorApplication = {
   _id: string;
-  userId: string;
+  userId?: string;
   applicantName: string;
   applicantEmail: string;
   storeName: string;
@@ -57,12 +57,40 @@ type Analytics = {
 
 type AdminOrder = {
   _id: string;
+  userId: string;
   customerName: string;
+  customerEmail?: string;
+  phone: string;
+  deliveryAddress: string;
+  notes?: string;
   status: string;
-  createdAt: string;
+  createdAt?: string;
+  subtotal?: number;
+  deliveryFee?: number;
   total: number;
-  items: Array<{ name: string; quantity: number; price: number }>;
+  items: Array<{
+    itemId: string;
+    productId: string;
+    vendorId?: string | null;
+    vendorName?: string | null;
+    name: string;
+    size: string;
+    quantity: number;
+    price: number;
+    subtotal: number;
+    status: string;
+  }>;
 };
+
+const orderStatuses = [
+  "pending",
+  "confirmed",
+  "preparing",
+  "out_for_delivery",
+  "delivered",
+  "cancelled",
+  "rejected",
+] as const;
 
 const sections = [
   { id: "users", label: "Users", icon: Users },
@@ -84,10 +112,16 @@ function AdminDashboardContent() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshingOrders, setRefreshingOrders] = useState(false);
   const [savingUserId, setSavingUserId] = useState("");
   const [reviewingId, setReviewingId] = useState("");
   const [selectedDetails, setSelectedDetails] = useState<UserDetails | null>(null);
   const [loadingDetailsId, setLoadingDetailsId] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [orderVendorFilter, setOrderVendorFilter] = useState("all");
+  const [orderCustomerSearch, setOrderCustomerSearch] = useState("");
+  const [orderFromDate, setOrderFromDate] = useState("");
+  const [orderToDate, setOrderToDate] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -95,7 +129,7 @@ function AdminDashboardContent() {
       apiFetch<UserAccount[]>("/admin/users"),
       apiFetch<VendorApplication[]>("/admin/vendors/pending"),
       apiFetch<Analytics>("/admin/analytics"),
-      apiFetch<AdminOrder[]>("/orders/admin/all"),
+      apiFetch<AdminOrder[]>("/admin/orders"),
     ])
       .then(([platformUsers, vendorApplications, platformAnalytics, platformOrders]) => {
         if (!active) return;
@@ -129,6 +163,18 @@ function AdminDashboardContent() {
       );
     } finally {
       setAnalyticsLoading(false);
+    }
+  }
+
+  async function refreshOrders() {
+    setRefreshingOrders(true);
+    try {
+      setOrders(await apiFetch<AdminOrder[]>("/admin/orders"));
+      toast.success("Order list is up to date.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not refresh orders.");
+    } finally {
+      setRefreshingOrders(false);
     }
   }
 
@@ -246,12 +292,12 @@ function AdminDashboardContent() {
 
   async function changeOrderStatus(order: AdminOrder, status: string) {
     try {
-      await apiFetch<void>(`/orders/admin/${order._id}/status`, {
+      const updated = await apiFetch<AdminOrder>(`/admin/orders/${order._id}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
       setOrders((current) =>
-        current.map((item) => (item._id === order._id ? { ...item, status } : item)),
+        current.map((item) => (item._id === order._id ? updated : item)),
       );
       toast.success(`Order #${order._id.slice(-6)} updated.`);
       void refreshAnalytics();
@@ -259,6 +305,37 @@ function AdminDashboardContent() {
       toast.error(cause instanceof Error ? cause.message : "Could not update order status.");
     }
   }
+
+  const vendorNames = new Map<string, string>();
+  const vendorOptions = Array.from(
+    new Set(
+      orders.flatMap((order) =>
+        order.items.map((item) => {
+          const id = item.vendorId ?? "platform";
+          if (item.vendorId) vendorNames.set(item.vendorId, item.vendorName || item.vendorId);
+          return id;
+        }),
+      ),
+    ),
+  );
+  const filteredOrders = orders.filter((order) => {
+    const matchesStatus =
+      orderStatusFilter === "all" ||
+      order.status === orderStatusFilter ||
+      order.items.some((item) => item.status === orderStatusFilter);
+    const matchesVendor =
+      orderVendorFilter === "all" ||
+      order.items.some((item) => (item.vendorId ?? "platform") === orderVendorFilter);
+    const query = orderCustomerSearch.trim().toLowerCase();
+    const matchesCustomer =
+      !query ||
+      [order.customerName, order.customerEmail, order.phone, order.userId, order._id]
+        .some((value) => value?.toLowerCase().includes(query));
+    const orderDate = order.createdAt?.slice(0, 10) ?? "";
+    const matchesFrom = !orderFromDate || orderDate >= orderFromDate;
+    const matchesTo = !orderToDate || orderDate <= orderToDate;
+    return matchesStatus && matchesVendor && matchesCustomer && matchesFrom && matchesTo;
+  });
 
   if (loading) {
     return <p className="py-16 text-center text-muted-foreground">Loading platform dashboard...</p>;
@@ -471,38 +548,166 @@ function AdminDashboardContent() {
 
         {section === "orders" && (
           <section>
-            <h2 className="text-2xl font-black">All orders</h2>
-            <p className="mt-1 text-muted-foreground">Review orders and update their overall fulfillment status.</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-black">All orders</h2>
+                <p className="mt-1 text-muted-foreground">
+                  Monitor customer orders, vendor items, and fulfillment status.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={refreshingOrders}
+                onClick={() => void refreshOrders()}
+                className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold hover:border-[#F26B4F] disabled:opacity-60"
+              >
+                <RefreshCw size={16} className={refreshingOrders ? "animate-spin" : ""} />
+                {refreshingOrders ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
             {orders.length === 0 ? (
               <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">No orders yet.</p>
             ) : (
               <div className="mt-6 grid gap-4">
-                {orders.map((order) => (
-                  <article key={order._id} className="rounded-2xl border border-border bg-card p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <h3 className="font-bold">Order #{order._id.slice(-6)} · {order.customerName}</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {new Date(order.createdAt).toLocaleString()}
-                        </p>
+                <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 xl:grid-cols-5">
+                  <label className="grid gap-1.5 text-sm font-semibold">
+                    Status
+                    <select
+                      value={orderStatusFilter}
+                      onChange={(event) => setOrderStatusFilter(event.target.value)}
+                      className="rounded-lg border border-border bg-background px-3 py-2 font-normal capitalize"
+                    >
+                      <option value="all">All statuses</option>
+                      {orderStatuses.map((status) => (
+                        <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-semibold">
+                    Vendor
+                    <select
+                      value={orderVendorFilter}
+                      onChange={(event) => setOrderVendorFilter(event.target.value)}
+                      className="rounded-lg border border-border bg-background px-3 py-2 font-normal"
+                    >
+                      <option value="all">All vendors</option>
+                      {vendorOptions.map((vendorId) => (
+                        <option key={vendorId} value={vendorId}>
+                          {vendorId === "platform" ? "PizzaHub platform" : vendorNames.get(vendorId) ?? vendorId}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-semibold">
+                    Customer
+                    <input
+                      value={orderCustomerSearch}
+                      onChange={(event) => setOrderCustomerSearch(event.target.value)}
+                      placeholder="Name, email or phone"
+                      className="rounded-lg border border-border bg-background px-3 py-2 font-normal"
+                    />
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-semibold">
+                    From
+                    <input
+                      type="date"
+                      value={orderFromDate}
+                      onChange={(event) => setOrderFromDate(event.target.value)}
+                      className="rounded-lg border border-border bg-background px-3 py-2 font-normal"
+                    />
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-semibold">
+                    To
+                    <input
+                      type="date"
+                      value={orderToDate}
+                      onChange={(event) => setOrderToDate(event.target.value)}
+                      className="rounded-lg border border-border bg-background px-3 py-2 font-normal"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderStatusFilter("all");
+                      setOrderVendorFilter("all");
+                      setOrderCustomerSearch("");
+                      setOrderFromDate("");
+                      setOrderToDate("");
+                    }}
+                    className="w-fit rounded-lg px-2 py-1 text-sm font-semibold text-[#F26B4F] hover:underline sm:col-span-2 xl:col-span-5"
+                  >
+                    Clear filters
+                  </button>
+                </div>
+                {filteredOrders.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+                    No orders match these filters.
+                  </p>
+                ) : (
+                  filteredOrders.map((order) => (
+                    <article key={order._id} className="rounded-2xl border border-border bg-card p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                          <h3 className="font-bold">Order #{order._id.slice(-6)} · {order.customerName}</h3>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {order.createdAt ? new Date(order.createdAt).toLocaleString() : "Date unavailable"}
+                            {order.customerEmail ? ` · ${order.customerEmail}` : ""}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {order.items.length} item{order.items.length === 1 ? "" : "s"} · Order status:
+                            <span className="ml-1 font-semibold capitalize text-foreground">
+                              {order.status.replaceAll("_", " ")}
+                            </span>
+                          </p>
+                        </div>
+                        <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+                          Admin status
+                          <select
+                            value={order.status}
+                            onChange={(event) => void changeOrderStatus(order, event.target.value)}
+                            aria-label={`Order status for ${order._id}`}
+                            className="rounded-lg border border-border bg-background px-3 py-2 text-sm capitalize text-foreground"
+                          >
+                            {orderStatuses.map((status) => (
+                              <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                            ))}
+                          </select>
+                        </label>
                       </div>
-                      <select
-                        value={order.status}
-                        onChange={(event) => void changeOrderStatus(order, event.target.value)}
-                        aria-label={`Order status for ${order._id}`}
-                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm capitalize"
-                      >
-                        {["pending", "confirmed", "preparing", "out_for_delivery", "delivered", "cancelled"].map((status) => (
-                          <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <p className="mt-4 text-sm text-muted-foreground">
-                      {order.items.map((item) => `${item.name} × ${item.quantity}`).join(", ")}
-                    </p>
-                    <p className="mt-3 font-bold">৳{order.total}</p>
-                  </article>
-                ))}
+                      <details className="mt-4 rounded-xl border border-border">
+                        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold hover:text-[#F26B4F]">
+                          View full order details
+                        </summary>
+                        <div className="grid gap-4 border-t border-border p-4">
+                          <div className="grid gap-2 text-sm sm:grid-cols-2">
+                            <p><span className="text-muted-foreground">Customer: </span>{order.customerName}</p>
+                            <p><span className="text-muted-foreground">Phone: </span>{order.phone || "Not provided"}</p>
+                            <p className="sm:col-span-2"><span className="text-muted-foreground">Delivery address: </span>{order.deliveryAddress || "Not provided"}</p>
+                            {order.notes && <p className="sm:col-span-2"><span className="text-muted-foreground">Notes: </span>{order.notes}</p>}
+                          </div>
+                          <div className="grid gap-2">
+                            {order.items.map((item) => (
+                              <div key={item.itemId} className="grid gap-2 rounded-xl bg-muted/50 p-3 text-sm sm:grid-cols-[1fr_auto]">
+                                <div>
+                                  <p className="font-semibold">{item.name} · {item.size} × {item.quantity}</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Vendor: {item.vendorName ?? (item.vendorId ? item.vendorId : "PizzaHub platform")} · Item status: {item.status.replaceAll("_", " ")}
+                                  </p>
+                                </div>
+                                <p className="font-bold">৳{item.subtotal}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="grid gap-1 border-t border-border pt-3 text-right text-sm">
+                            {order.subtotal !== undefined && <p>Subtotal · ৳{order.subtotal}</p>}
+                            {order.deliveryFee !== undefined && <p>Delivery · ৳{order.deliveryFee}</p>}
+                            <p className="font-black">Total · ৳{order.total}</p>
+                          </div>
+                        </div>
+                      </details>
+                    </article>
+                  ))
+                )}
               </div>
             )}
           </section>

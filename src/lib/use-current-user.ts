@@ -48,12 +48,6 @@ export function useCurrentUser() {
     setReloadKey((current) => current + 1);
   }, []);
 
-  useEffect(() => {
-    if (!sessionUserId) return;
-    window.addEventListener("focus", retry);
-    return () => window.removeEventListener("focus", retry);
-  }, [retry, sessionUserId]);
-
   const currentResult =
     loadResult &&
     loadResult.sessionUserId === sessionUserId &&
