@@ -4,13 +4,35 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LoaderCircle, Package, Star, Tags, Utensils } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import type { Product } from "@/types";
 
 type ProductChanges = Partial<
-  Pick<Product, "price" | "isAvailable" | "isFeatured">
+  Pick<
+    Product,
+    | "name"
+    | "slug"
+    | "description"
+    | "category"
+    | "price"
+    | "image"
+    | "isAvailable"
+    | "isFeatured"
+  >
 >;
+
+type ProductEditDraft = Omit<ProductChanges, "price"> & {
+  name: string;
+  slug: string;
+  description: string;
+  category: string;
+  image: string;
+  price: string;
+  isAvailable: boolean;
+  isFeatured: boolean;
+};
 
 export default function AdminPage() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
@@ -19,6 +41,9 @@ export default function AdminPage() {
     (user as (typeof user & { role?: string }) | null)?.role === "admin";
   const [products, setProducts] = useState<Product[]>([]);
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<ProductEditDraft | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -47,7 +72,10 @@ export default function AdminPage() {
     };
   }, [isAdmin, sessionPending]);
 
-  async function updateProduct(product: Product, changes: ProductChanges) {
+  async function updateProduct(
+    product: Product,
+    changes: ProductChanges,
+  ): Promise<Product | null> {
     setSavingId(product._id);
     try {
       const updated = await apiFetch<Product>(
@@ -68,9 +96,74 @@ export default function AdminPage() {
         });
       }
       toast.success(`${product.name} updated.`);
+      return updated;
     } catch (cause) {
       toast.error(
         cause instanceof Error ? cause.message : "Could not update product.",
+      );
+      return null;
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  function startEditing(product: Product) {
+    setEditingProductId(product._id);
+    setEditDraft({
+      name: product.name,
+      slug: product.slug,
+      description: product.description,
+      category: product.category,
+      image: product.image,
+      price: String(product.price),
+      isAvailable: product.isAvailable,
+      isFeatured: product.isFeatured,
+    });
+  }
+
+  async function saveProductEdit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const product = products.find((item) => item._id === editingProductId);
+    if (!product || !editDraft) return;
+
+    const price = Number(editDraft.price);
+    if (!Number.isFinite(price) || price <= 0) {
+      toast.error("Enter a price greater than zero.");
+      return;
+    }
+
+    const updated = await updateProduct(product, {
+      ...editDraft,
+      price,
+    });
+    if (!updated) return;
+    setEditingProductId(null);
+    setEditDraft(null);
+  }
+
+  async function deleteProduct() {
+    const product = productToDelete;
+    if (!product) return;
+    setSavingId(product._id);
+    try {
+      await apiFetch<void>(`/admin/products/${product._id}`, {
+        method: "DELETE",
+      });
+      setProducts((current) => current.filter((item) => item._id !== product._id));
+      setPriceDrafts((current) => {
+        const next = { ...current };
+        delete next[product._id];
+        return next;
+      });
+      if (editingProductId === product._id) {
+        setEditingProductId(null);
+        setEditDraft(null);
+      }
+      setProductToDelete(null);
+      toast.success(`${product.name} was deleted from the menu.`);
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "Could not delete product.",
       );
     } finally {
       setSavingId(null);
@@ -160,6 +253,149 @@ export default function AdminPage() {
         ))}
       </section>
 
+      {editingProductId && editDraft && (
+        <form
+          onSubmit={saveProductEdit}
+          className="mt-8 grid gap-4 rounded-2xl border border-border bg-card p-5 sm:grid-cols-2"
+        >
+          <div className="sm:col-span-2">
+            <h2 className="text-xl font-black">Edit product</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Save changes in place; the product list will update without reloading.
+            </p>
+          </div>
+          <label className="grid gap-1.5 text-sm font-semibold">
+            Name
+            <input
+              required
+              value={editDraft.name}
+              onChange={(event) =>
+                setEditDraft((current) =>
+                  current ? { ...current, name: event.target.value } : current,
+                )
+              }
+              className="rounded-xl border border-border bg-background px-3 py-2.5 font-normal"
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-semibold">
+            Slug
+            <input
+              required
+              value={editDraft.slug}
+              onChange={(event) =>
+                setEditDraft((current) =>
+                  current ? { ...current, slug: event.target.value } : current,
+                )
+              }
+              className="rounded-xl border border-border bg-background px-3 py-2.5 font-normal"
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-semibold">
+            Category
+            <input
+              required
+              value={editDraft.category}
+              onChange={(event) =>
+                setEditDraft((current) =>
+                  current ? { ...current, category: event.target.value } : current,
+                )
+              }
+              className="rounded-xl border border-border bg-background px-3 py-2.5 font-normal"
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-semibold">
+            Price
+            <input
+              required
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={editDraft.price}
+              onChange={(event) =>
+                setEditDraft((current) =>
+                  current ? { ...current, price: event.target.value } : current,
+                )
+              }
+              className="rounded-xl border border-border bg-background px-3 py-2.5 font-normal"
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">
+            Image URL
+            <input
+              required
+              type="url"
+              value={editDraft.image}
+              onChange={(event) =>
+                setEditDraft((current) =>
+                  current ? { ...current, image: event.target.value } : current,
+                )
+              }
+              className="rounded-xl border border-border bg-background px-3 py-2.5 font-normal"
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">
+            Description
+            <textarea
+              required
+              rows={3}
+              value={editDraft.description}
+              onChange={(event) =>
+                setEditDraft((current) =>
+                  current ? { ...current, description: event.target.value } : current,
+                )
+              }
+              className="resize-y rounded-xl border border-border bg-background px-3 py-2.5 font-normal"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={editDraft.isAvailable}
+              onChange={(event) =>
+                setEditDraft((current) =>
+                  current ? { ...current, isAvailable: event.target.checked } : current,
+                )
+              }
+              className="accent-[#F26B4F]"
+            />
+            Available in menu
+          </label>
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={editDraft.isFeatured}
+              onChange={(event) =>
+                setEditDraft((current) =>
+                  current ? { ...current, isFeatured: event.target.checked } : current,
+                )
+              }
+              className="accent-[#F26B4F]"
+            />
+            Featured item
+          </label>
+          <div className="flex gap-2 sm:col-span-2">
+            <button
+              type="submit"
+              disabled={savingId !== null}
+              className="rounded-xl bg-[#F26B4F] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+            >
+              {savingId === editingProductId ? "Saving..." : "Save product"}
+            </button>
+            <button
+              type="button"
+              disabled={savingId !== null}
+              onClick={() => {
+                setEditingProductId(null);
+                setEditDraft(null);
+              }}
+              className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
       <section className="mt-8 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         <div className="border-b border-border px-5 py-4">
           <h2 className="text-lg font-bold">Menu products</h2>
@@ -246,10 +482,26 @@ export default function AdminPage() {
                           <button
                             type="button"
                             disabled={savingId !== null}
+                            onClick={() => startEditing(product)}
+                            className="rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:border-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            disabled={savingId !== null}
                             onClick={() => void updateProduct(product, { isFeatured: !product.isFeatured })}
                             className="rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:border-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {product.isFeatured ? "Unfeature" : "Feature"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={savingId !== null}
+                            onClick={() => setProductToDelete(product)}
+                            className="rounded-lg border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {saving ? "Working..." : "Delete"}
                           </button>
                         </div>
                       </td>
@@ -261,6 +513,16 @@ export default function AdminPage() {
           </div>
         )}
       </section>
+      <ConfirmDialog
+        open={productToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && savingId === null) setProductToDelete(null);
+        }}
+        itemName={productToDelete?.name ?? ""}
+        description="This product will be removed from the platform menu and can no longer be ordered."
+        pending={savingId === productToDelete?._id}
+        onConfirm={() => void deleteProduct()}
+      />
     </main>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BarChart3, ClipboardList, Package, Store } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
 import type { Product } from "@/types";
@@ -59,6 +60,7 @@ type ProductForm = {
   category: string;
   price: string;
   image: string;
+  isAvailable: boolean;
 };
 
 const emptyProduct: ProductForm = {
@@ -68,6 +70,7 @@ const emptyProduct: ProductForm = {
   category: "",
   price: "",
   image: "",
+  isAvailable: true,
 };
 
 const emptyStore: StoreSettings = {
@@ -100,8 +103,10 @@ function VendorDashboardContent() {
   const [store, setStore] = useState<StoreSettings>(emptyStore);
   const [form, setForm] = useState<ProductForm>(emptyProduct);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingProduct, setSavingProduct] = useState(false);
+  const [removingProductId, setRemovingProductId] = useState("");
   const [savingStore, setSavingStore] = useState(false);
   const [savingOrderItem, setSavingOrderItem] = useState("");
   const [error, setError] = useState("");
@@ -145,6 +150,7 @@ function VendorDashboardContent() {
       category: product.category,
       price: String(product.price),
       image: product.image,
+      isAvailable: product.isAvailable,
     });
     setSection("products");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -165,11 +171,16 @@ function VendorDashboardContent() {
 
     setSavingProduct(true);
     try {
+      const { isAvailable, ...productFields } = form;
       const saved = await apiFetch<Product>(
         editingId ? `/vendor/products/${editingId}` : "/vendor/products",
         {
           method: editingId ? "PUT" : "POST",
-          body: JSON.stringify({ ...form, price }),
+          body: JSON.stringify({
+            ...productFields,
+            price,
+            ...(editingId ? { isAvailable } : {}),
+          }),
         },
       );
       setProducts((current) =>
@@ -186,16 +197,22 @@ function VendorDashboardContent() {
     }
   }
 
-  async function removeProduct(product: Product) {
-    if (!window.confirm(`Remove ${product.name} from your store?`)) return;
+  async function removeProduct() {
+    const product = productToDelete;
+    if (!product) return;
+    setRemovingProductId(product._id);
     try {
       await apiFetch<void>(`/vendor/products/${product._id}`, {
         method: "DELETE",
       });
       setProducts((current) => current.filter((item) => item._id !== product._id));
-      toast.success("Product removed.");
+      if (editingId === product._id) resetProductForm();
+      setProductToDelete(null);
+      toast.success(`${product.name} was removed from your store.`);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not remove product.");
+    } finally {
+      setRemovingProductId("");
     }
   }
 
@@ -284,6 +301,22 @@ function VendorDashboardContent() {
               <input required type="number" min="0.01" step="0.01" placeholder="Price" value={form.price} onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))} className="rounded-xl border border-border bg-background px-3 py-2.5 outline-none focus:border-[#F26B4F]" />
               <input required type="url" placeholder="Image URL" value={form.image} onChange={(event) => setForm((current) => ({ ...current, image: event.target.value }))} className="rounded-xl border border-border bg-background px-3 py-2.5 outline-none focus:border-[#F26B4F] sm:col-span-2" />
               <textarea required rows={2} placeholder="Description" value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} className="resize-y rounded-xl border border-border bg-background px-3 py-2.5 outline-none focus:border-[#F26B4F] sm:col-span-2" />
+              {editingId && (
+                <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={form.isAvailable}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        isAvailable: event.target.checked,
+                      }))
+                    }
+                    className="accent-[#F26B4F]"
+                  />
+                  Available in menu
+                </label>
+              )}
               <div className="flex gap-2 sm:col-span-2">
                 <button disabled={savingProduct} className="rounded-xl bg-[#F26B4F] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">
                   {savingProduct ? "Saving..." : editingId ? "Save changes" : "Add product"}
@@ -308,7 +341,7 @@ function VendorDashboardContent() {
                     </div>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => editProduct(product)} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:border-[#F26B4F]">Edit</button>
-                      <button type="button" onClick={() => void removeProduct(product)} className="rounded-lg border border-red-500/30 px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/10">Remove</button>
+                      <button type="button" onClick={() => setProductToDelete(product)} className="rounded-lg border border-red-500/30 px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/10">Remove</button>
                     </div>
                   </article>
                 ))}
@@ -433,6 +466,16 @@ function VendorDashboardContent() {
           </section>
         )}
       </div>
+      <ConfirmDialog
+        open={productToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !removingProductId) setProductToDelete(null);
+        }}
+        itemName={productToDelete?.name ?? ""}
+        description="This product will be removed from your store and can no longer be ordered."
+        pending={removingProductId === productToDelete?._id}
+        onConfirm={() => void removeProduct()}
+      />
     </div>
   );
 }
