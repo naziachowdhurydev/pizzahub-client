@@ -16,6 +16,21 @@ type UserAccount = {
   createdAt?: string;
 };
 
+type UserDetails = {
+  user: UserAccount;
+  sessions: Array<{
+    id: string;
+    createdAt: string;
+    updatedAt?: string;
+    expiresAt: string;
+  }>;
+  linkedAccounts: Array<{
+    providerId: string;
+    createdAt?: string;
+    updatedAt?: string;
+  }>;
+};
+
 type VendorApplication = {
   _id: string;
   userId: string;
@@ -53,6 +68,8 @@ function AdminDashboardContent() {
   const [error, setError] = useState("");
   const [savingUserId, setSavingUserId] = useState("");
   const [reviewingId, setReviewingId] = useState("");
+  const [selectedDetails, setSelectedDetails] = useState<UserDetails | null>(null);
+  const [loadingDetailsId, setLoadingDetailsId] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -104,6 +121,27 @@ function AdminDashboardContent() {
       toast.error(cause instanceof Error ? cause.message : "Could not update role.");
     } finally {
       setSavingUserId("");
+    }
+  }
+
+  async function loadUserDetails(user: UserAccount) {
+    const userId = user.id ?? user._id;
+    if (!userId) {
+      toast.error("This account has no usable ID.");
+      return;
+    }
+    setLoadingDetailsId(userId);
+    try {
+      const details = await apiFetch<UserDetails>(
+        `/admin/users/${encodeURIComponent(userId)}/details`,
+      );
+      setSelectedDetails(details);
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "Could not load user details.",
+      );
+    } finally {
+      setLoadingDetailsId("");
     }
   }
 
@@ -178,6 +216,7 @@ function AdminDashboardContent() {
                       <th className="px-4 py-3">Account</th>
                       <th className="px-4 py-3">Email</th>
                       <th className="px-4 py-3">Role</th>
+                      <th className="px-4 py-3">Details</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -202,12 +241,71 @@ function AdminDashboardContent() {
                               <option value="admin">Admin</option>
                             </select>
                           </td>
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              disabled={!userId || loadingDetailsId === userId}
+                              onClick={() => void loadUserDetails(user)}
+                              className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:border-[#F26B4F] disabled:opacity-60"
+                            >
+                              {loadingDetailsId === userId ? "Loading..." : "View details"}
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
+            )}
+            {selectedDetails && (
+              <section className="mt-5 grid gap-5 rounded-2xl border border-border bg-card p-5 md:grid-cols-3">
+                <div>
+                  <h3 className="font-bold">Account information</h3>
+                  <p className="mt-3 font-semibold">{selectedDetails.user.name}</p>
+                  <p className="text-sm text-muted-foreground">{selectedDetails.user.email}</p>
+                  <p className="mt-2 text-sm capitalize">Role: {selectedDetails.user.role}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Created {selectedDetails.user.createdAt
+                      ? new Date(selectedDetails.user.createdAt).toLocaleDateString()
+                      : "date unavailable"}
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-bold">Sessions</h3>
+                  {selectedDetails.sessions.length === 0 ? (
+                    <p className="mt-3 text-sm text-muted-foreground">No sessions recorded.</p>
+                  ) : (
+                    <ul className="mt-3 grid gap-3">
+                      {selectedDetails.sessions.map((session) => (
+                        <li key={session.id} className="text-sm">
+                          <p className="font-medium">Session {session.id.slice(-8)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Expires {new Date(session.expiresAt).toLocaleString()}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Session tokens and credentials are not displayed.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-bold">Linked accounts</h3>
+                  {selectedDetails.linkedAccounts.length === 0 ? (
+                    <p className="mt-3 text-sm text-muted-foreground">No linked accounts.</p>
+                  ) : (
+                    <ul className="mt-3 grid gap-2">
+                      {selectedDetails.linkedAccounts.map((account, index) => (
+                        <li key={`${account.providerId}-${index}`} className="text-sm capitalize">
+                          {account.providerId}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </section>
             )}
           </section>
         )}

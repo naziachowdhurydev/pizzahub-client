@@ -10,4 +10,8 @@ export type Product = {
   isAvailable: boolean;
   isFeatured: boolean;
   rating: number;
+  vendorId?: string | null;
+  ingredients?: string[];
+  allergens?: string[];
+  preparationTime?: string;
 };

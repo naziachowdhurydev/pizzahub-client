@@ -188,7 +188,9 @@ export default function AdminPage() {
                   return (
                     <tr key={product._id} className="align-middle">
                       <td className="px-5 py-4">
-                        <p className="font-bold">{product.name}</p>
+                        <Link href={`/menu/${product.slug}`} className="font-bold hover:text-[#F26B4F]">
+                          {product.name}
+                        </Link>
                         <p className="mt-1 text-xs text-muted-foreground">{product.category}</p>
                       </td>
                       <td className="px-5 py-4">

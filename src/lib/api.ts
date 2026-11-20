@@ -9,6 +9,17 @@ export async function getProducts(): Promise<Product[]> {
   return result.data as Product[];
 }
 
+export async function getProduct(slug: string): Promise<Product | null> {
+  const response = await fetch(
+    `${API_URL}/products/${encodeURIComponent(slug)}`,
+    { cache: "no-store" },
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error("Failed to load product details");
+  const result = await response.json();
+  return result.data as Product;
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const tokenResult = await (await import("@/lib/auth-client")).authClient.token();
   const token = tokenResult.data?.token;

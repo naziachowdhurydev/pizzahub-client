@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Pizza,
   Menu,
@@ -13,10 +13,18 @@ import {
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { apiFetch } from "@/lib/api";
+import { CART_UPDATED_EVENT } from "@/lib/cart-events";
+import { toast } from "sonner";
+
+type CartSummary = {
+  itemCount: number;
+};
 
 export function SiteHeader() {
   const { data: session, isPending } = authClient.useSession();
   const [open, setOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
 
   const user = session?.user;
   const userRole =
@@ -26,6 +34,36 @@ export function SiteHeader() {
     userRole === "admin" || userRole === "vendor"
       ? `/dashboard/${userRole}`
       : "/dashboard/customer";
+  const userId = (user as (typeof user & { id?: string }) | null)?.id;
+
+  useEffect(() => {
+    let active = true;
+    if (isPending || !user || userRole !== "customer") return;
+
+    async function refreshCartCount() {
+      try {
+        const cart = await apiFetch<CartSummary>("/cart");
+        if (active) setCartCount(cart.itemCount);
+      } catch (error) {
+        if (active) {
+          toast.error(
+            error instanceof Error ? error.message : "Could not refresh your cart.",
+          );
+        }
+      }
+    }
+
+    const handleCartUpdate = () => void refreshCartCount();
+    void refreshCartCount();
+    window.addEventListener(CART_UPDATED_EVENT, handleCartUpdate);
+    window.addEventListener("focus", handleCartUpdate);
+
+    return () => {
+      active = false;
+      window.removeEventListener(CART_UPDATED_EVENT, handleCartUpdate);
+      window.removeEventListener("focus", handleCartUpdate);
+    };
+  }, [isPending, user, userId, userRole]);
 
   const links = [
     { href: "/", label: "Home" },
@@ -90,9 +128,14 @@ export function SiteHeader() {
           <Link
             href="/cart"
             aria-label="Shopping cart"
-            className="rounded-xl p-2.5 text-foreground transition hover:bg-accent hover:text-accent-foreground"
+            className="relative rounded-xl p-2.5 text-foreground transition hover:bg-accent hover:text-accent-foreground"
           >
             <ShoppingBag size={21} />
+            {user && userRole === "customer" && cartCount > 0 && (
+              <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#F26B4F] px-1 text-[10px] font-black text-white">
+                {cartCount > 99 ? "99+" : cartCount}
+              </span>
+            )}
           </Link>
 
           {isPending ? (
@@ -198,7 +241,7 @@ export function SiteHeader() {
               className="flex items-center gap-2 font-semibold text-foreground"
             >
               <ShoppingBag size={18} />
-              Shopping Cart
+              Shopping Cart{user && userRole === "customer" && cartCount > 0 ? ` (${cartCount})` : ""}
             </Link>
 
             <div className="border-t border-border pt-4">

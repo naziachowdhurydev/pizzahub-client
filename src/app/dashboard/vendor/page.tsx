@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BarChart3, ClipboardList, Package, Store } from "lucide-react";
 import { toast } from "sonner";
@@ -250,7 +251,11 @@ function VendorDashboardContent() {
                 {products.map((product) => (
                   <article key={product._id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4">
                     <div>
-                      <h3 className="font-bold">{product.name}</h3>
+                      <h3 className="font-bold">
+                        <Link href={`/menu/${product.slug}`} className="hover:text-[#F26B4F]">
+                          {product.name}
+                        </Link>
+                      </h3>
                       <p className="mt-1 text-sm text-muted-foreground">{product.category} · ৳{product.price} · {product.isAvailable ? "Available" : "Unavailable"}</p>
                     </div>
                     <div className="flex gap-2">
