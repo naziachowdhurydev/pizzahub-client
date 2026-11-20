@@ -56,6 +56,31 @@ export function DashboardAccess({
     );
   }
 
+  if (
+    role === "vendor" &&
+    user.role === "vendor" &&
+    user.vendorStatus !== "approved"
+  ) {
+    const applicationStatus = user.vendorStatus ?? "not_applied";
+    return (
+      <main className="mx-auto grid min-h-[65vh] max-w-3xl place-items-center px-5 py-16 text-center">
+        <div>
+          <h1 className="text-3xl font-black">Vendor approval required</h1>
+          <p className="mt-3 text-muted-foreground">
+            Your vendor application is {applicationStatus.replaceAll("_", " ")}.
+            Order management becomes available after an administrator approves your account.
+          </p>
+          <Link
+            href="/"
+            className="mt-6 inline-flex rounded-xl border border-border px-5 py-3 font-semibold"
+          >
+            Back to home
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   const hasAccess = user.role === role || (role === "vendor" && user.role === "admin");
   if (!hasAccess) {
     return (

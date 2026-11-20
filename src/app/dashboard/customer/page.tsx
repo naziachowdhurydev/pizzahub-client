@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { CircleX, Heart, MapPin, PackageCheck, RefreshCw, UserRound } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bell, CircleX, Heart, LifeBuoy, MapPin, PackageCheck, RefreshCw, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DashboardAccess } from "@/components/dashboard-access";
@@ -22,13 +22,39 @@ type Order = {
   items: Array<{
     itemId: string;
     vendorId?: string | null;
+    vendorName?: string | null;
     size: string;
     name: string;
     quantity: number;
     price: number;
     subtotal?: number;
     status?: string;
+    rejectionReason?: string;
   }>;
+};
+
+type CustomerNotification = {
+_id: string;
+title: string;
+message: string;
+type: string;
+orderId?: string;
+issueId?: string;
+isRead: boolean;
+createdAt: string;
+};
+
+type OrderIssueType = "complaint" | "cancellation" | "refund";
+
+type CustomerOrderIssue = {
+_id: string;
+orderId: string;
+type: OrderIssueType;
+message: string;
+status: "open" | "in_review" | "resolved" | "rejected";
+adminNote?: string;
+createdAt: string;
+updatedAt: string;
 };
 
 type Address = {
@@ -59,9 +85,29 @@ const sections = [
   { id: "wishlist", label: "My Wishlist", icon: Heart },
   { id: "address", label: "My Address", icon: MapPin },
   { id: "profile", label: "My Profile", icon: UserRound },
+  { id: "support", label: "Support Requests", icon: LifeBuoy },
+  { id: "notifications", label: "Notifications", icon: Bell },
 ] as const;
 
 type Section = (typeof sections)[number]["id"];
+
+function groupItemsByVendor(items: Order["items"]) {
+  const groups = new Map<
+    string,
+    { key: string; name: string; items: Order["items"] }
+  >();
+  items.forEach((item) => {
+    const key = item.vendorId ?? "platform";
+    const group = groups.get(key) ?? {
+      key,
+      name: item.vendorName || "PizzaHub platform",
+      items: [],
+    };
+    group.items.push(item);
+    groups.set(key, group);
+  });
+  return [...groups.values()];
+}
 
 function CustomerDashboardContent() {
   const { data: session } = authClient.useSession();
@@ -80,6 +126,15 @@ function CustomerDashboardContent() {
   const [loadingOrderId, setLoadingOrderId] = useState("");
   const [storeName, setStoreName] = useState("");
   const [storeDescription, setStoreDescription] = useState("");
+  const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
+  const [supportRequests, setSupportRequests] = useState<CustomerOrderIssue[]>([]);
+  const [supportLoading, setSupportLoading] = useState(true);
+  const [issueOrderId, setIssueOrderId] = useState("");
+  const [issueType, setIssueType] = useState<OrderIssueType>("complaint");
+  const [issueMessage, setIssueMessage] = useState("");
+  const [submittingIssue, setSubmittingIssue] = useState(false);
+  const notificationIds = useRef(new Set<string>());
+  const notificationHistoryLoaded = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -109,6 +164,74 @@ function CustomerDashboardContent() {
       })
       .finally(() => {
         if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshNotifications = async () => {
+      try {
+        const latest = await apiFetch<CustomerNotification[]>("/orders/notifications");
+        if (!active) return;
+        if (notificationHistoryLoaded.current) {
+          const newNotifications = latest.filter(
+            (notification) => !notificationIds.current.has(notification._id),
+          );
+          newNotifications.forEach((notification) =>
+            toast.info(notification.title, { description: notification.message }),
+          );
+          if (newNotifications.length > 0) {
+            try {
+              const [latestOrders, latestIssues] = await Promise.all([
+                apiFetch<Order[]>("/orders/my"),
+                apiFetch<CustomerOrderIssue[]>("/orders/issues/my"),
+              ]);
+              if (active) {
+                setOrders(latestOrders);
+                setSupportRequests(latestIssues);
+              }
+            } catch (error) {
+              toast.error(
+                error instanceof Error ? error.message : "Could not refresh order updates.",
+              );
+            }
+          }
+        }
+        notificationIds.current = new Set(latest.map((notification) => notification._id));
+        notificationHistoryLoaded.current = true;
+        setNotifications(latest);
+      } catch (error) {
+        if (active && !notificationHistoryLoaded.current) {
+          toast.error(
+            error instanceof Error ? error.message : "Could not load notifications.",
+          );
+        }
+      }
+    };
+    void refreshNotifications();
+    const timer = window.setInterval(() => void refreshNotifications(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    apiFetch<CustomerOrderIssue[]>("/orders/issues/my")
+      .then((issues) => {
+        if (active) setSupportRequests(issues);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          toast.error(error instanceof Error ? error.message : "Could not load support requests.");
+        }
+      })
+      .finally(() => {
+        if (active) setSupportLoading(false);
       });
     return () => {
       active = false;
@@ -164,6 +287,51 @@ function CustomerDashboardContent() {
       toast.error(error instanceof Error ? error.message : "Could not cancel this order.");
     } finally {
       setCancellingOrderId("");
+    }
+  }
+
+  async function submitOrderIssue(
+    event: React.FormEvent<HTMLFormElement>,
+    order: Order,
+  ) {
+    event.preventDefault();
+    const message = issueMessage.trim();
+    if (message.length < 10) {
+      toast.error("Please provide at least 10 characters of detail.");
+      return;
+    }
+    setSubmittingIssue(true);
+    try {
+      const created = await apiFetch<CustomerOrderIssue>(
+        `/orders/${order._id}/issues`,
+        {
+          method: "POST",
+          body: JSON.stringify({ type: issueType, message }),
+        },
+      );
+      setSupportRequests((current) => [created, ...current]);
+      setIssueOrderId("");
+      setIssueMessage("");
+      toast.success("Your request was sent to PizzaHub support.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not submit your request.");
+    } finally {
+      setSubmittingIssue(false);
+    }
+  }
+
+  async function markNotificationRead(notification: CustomerNotification) {
+    try {
+      await apiFetch<void>(`/orders/notifications/${notification._id}/read`, {
+        method: "PATCH",
+      });
+      setNotifications((current) =>
+        current.map((item) =>
+          item._id === notification._id ? { ...item, isRead: true } : item,
+        ),
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update notification.");
     }
   }
 
@@ -318,22 +486,102 @@ function CustomerDashboardContent() {
                           <p><span className="text-muted-foreground">Delivery address: </span>{order.deliveryAddress || "Not provided"}</p>
                           <p><span className="text-muted-foreground">Phone: </span>{order.phone || "Not provided"}</p>
                         </div>
-                        <div className="grid gap-2">
-                          {order.items.map((item, index) => (
-                            <div
-                              key={`${item.itemId}-${index}`}
-                              className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/50 p-3 text-sm"
-                            >
-                              <div>
-                                <p className="font-semibold">{item.name} · {item.size} × {item.quantity}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  Vendor item status: {(item.status ?? order.status).replaceAll("_", " ")}
-                                </p>
-                              </div>
-                              <p className="font-bold">৳{item.subtotal ?? item.price * item.quantity}</p>
-                            </div>
-                          ))}
+                        <div className="grid gap-3">
+                          {groupItemsByVendor(order.items).map((group) => {
+                            const statuses = [
+                              ...new Set(group.items.map((item) => item.status ?? order.status)),
+                            ];
+                            return (
+                              <section key={group.key} className="rounded-xl border border-border p-3">
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                  <h4 className="font-bold">{group.name}</h4>
+                                  <span className="rounded-full bg-orange-500/10 px-2.5 py-1 text-xs font-semibold capitalize text-[#F26B4F]">
+                                    {statuses.length === 1 ? statuses[0].replaceAll("_", " ") : "Multiple statuses"}
+                                  </span>
+                                </div>
+                                <div className="grid gap-2">
+                                  {group.items.map((item) => (
+                                    <div
+                                      key={item.itemId}
+                                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/50 p-3 text-sm"
+                                    >
+                                      <div>
+                                        <p className="font-semibold">{item.name} · {item.size} × {item.quantity}</p>
+                                        <p className="mt-1 text-xs capitalize text-muted-foreground">
+                                          Item status: {(item.status ?? order.status).replaceAll("_", " ")}
+                                        </p>
+                                        {item.status === "rejected" && item.rejectionReason && (
+                                          <p className="mt-2 text-sm text-red-600">
+                                            Vendor reason: {item.rejectionReason}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <p className="font-bold">৳{item.subtotal ?? item.price * item.quantity}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </section>
+                            );
+                          })}
                         </div>
+                        {issueOrderId === order._id ? (
+                          <form
+                            onSubmit={(event) => void submitOrderIssue(event, order)}
+                            className="grid gap-3 rounded-xl border border-border bg-card p-4"
+                          >
+                            <h4 className="font-bold">Contact PizzaHub about this order</h4>
+                            <label className="grid gap-1.5 text-sm font-semibold">
+                              Request type
+                              <select
+                                value={issueType}
+                                onChange={(event) => setIssueType(event.target.value as OrderIssueType)}
+                                className="rounded-lg border border-border bg-background px-3 py-2 font-normal"
+                              >
+                                <option value="complaint">Complaint</option>
+                                <option value="cancellation">Cancellation request</option>
+                                <option value="refund">Refund request</option>
+                              </select>
+                            </label>
+                            <label className="grid gap-1.5 text-sm font-semibold">
+                              Details
+                              <textarea
+                                required
+                                minLength={10}
+                                maxLength={2000}
+                                rows={3}
+                                value={issueMessage}
+                                onChange={(event) => setIssueMessage(event.target.value)}
+                                className="resize-y rounded-lg border border-border bg-background px-3 py-2 font-normal"
+                                placeholder="Describe the issue or request."
+                              />
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="submit"
+                                disabled={submittingIssue}
+                                className="rounded-lg bg-[#F26B4F] px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+                              >
+                                {submittingIssue ? "Sending..." : "Send request"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={submittingIssue}
+                                onClick={() => setIssueOrderId("")}
+                                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setIssueOrderId(order._id)}
+                            className="w-fit rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:border-[#F26B4F]"
+                          >
+                            Request help, cancellation or refund
+                          </button>
+                        )}
                       </div>
                     )}
                   </article>
@@ -471,6 +719,88 @@ function CustomerDashboardContent() {
                 </form>
               )}
             </div>
+          </section>
+        )}
+
+        {section === "support" && (
+          <section>
+            <h2 className="text-2xl font-black">Support requests</h2>
+            <p className="mt-1 text-muted-foreground">
+              Track complaints, cancellation requests and refund requests.
+            </p>
+            {supportLoading ? (
+              <p className="mt-6 text-muted-foreground">Loading support requests...</p>
+            ) : supportRequests.length === 0 ? (
+              <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+                You have no support requests.
+              </p>
+            ) : (
+              <div className="mt-6 grid gap-3">
+                {supportRequests.map((request) => (
+                  <article key={request._id} className="rounded-2xl border border-border bg-card p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold capitalize">{request.type} · Order #{request.orderId.slice(-6)}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Date(request.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold capitalize text-[#F26B4F]">
+                        {request.status.replaceAll("_", " ")}
+                      </span>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap text-sm">{request.message}</p>
+                    {request.adminNote && (
+                      <p className="mt-3 rounded-lg bg-muted p-3 text-sm">
+                        <span className="font-semibold">Admin response: </span>{request.adminNote}
+                      </p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {section === "notifications" && (
+          <section>
+            <h2 className="text-2xl font-black">Notifications</h2>
+            <p className="mt-1 text-muted-foreground">
+              Order updates and support-request responses.
+            </p>
+            {notifications.length === 0 ? (
+              <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+                You have no notifications.
+              </p>
+            ) : (
+              <div className="mt-6 grid gap-3">
+                {notifications.map((notification) => (
+                  <article
+                    key={notification._id}
+                    className={`rounded-2xl border border-border bg-card p-5 ${notification.isRead ? "opacity-70" : ""}`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold">{notification.title}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Date(notification.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      {!notification.isRead && (
+                        <button
+                          type="button"
+                          onClick={() => void markNotificationRead(notification)}
+                          className="text-sm font-semibold text-[#F26B4F] hover:underline"
+                        >
+                          Mark as read
+                        </button>
+                      )}
+                    </div>
+                    <p className="mt-3 text-sm">{notification.message}</p>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         )}
       </div>

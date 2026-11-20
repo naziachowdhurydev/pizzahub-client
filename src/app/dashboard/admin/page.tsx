@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { BarChart3, ClipboardList, Package, RefreshCw, Store, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BarChart3, Bell, ClipboardList, LifeBuoy, Package, RefreshCw, Store, Users } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
@@ -79,8 +79,36 @@ type AdminOrder = {
     price: number;
     subtotal: number;
     status: string;
+    rejectionReason?: string;
   }>;
 };
+
+type AdminNotification = {
+  _id: string;
+  title: string;
+  message: string;
+  type: string;
+  orderId?: string;
+  issueId?: string;
+  isRead: boolean;
+  createdAt: string;
+};
+
+type AdminOrderIssue = {
+  _id: string;
+  orderId: string;
+  customerId: string;
+  customerName: string;
+  type: "complaint" | "cancellation" | "refund";
+  message: string;
+  itemId?: string;
+  orderTotal: number;
+  status: "open" | "in_review" | "resolved" | "rejected";
+  adminNote?: string;
+  createdAt: string;
+};
+
+type OrderIssueStatus = AdminOrderIssue["status"];
 
 const orderStatuses = [
   "pending",
@@ -96,6 +124,8 @@ const sections = [
   { id: "users", label: "Users", icon: Users },
   { id: "vendors", label: "Vendors", icon: Store },
   { id: "orders", label: "Orders", icon: ClipboardList },
+  { id: "issues", label: "Order issues", icon: LifeBuoy },
+  { id: "notifications", label: "Notifications", icon: Bell },
   { id: "products", label: "All Products", icon: Package },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
 ] as const;
@@ -108,6 +138,8 @@ function AdminDashboardContent() {
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [applications, setApplications] = useState<VendorApplication[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [orderIssues, setOrderIssues] = useState<AdminOrderIssue[]>([]);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -122,6 +154,13 @@ function AdminDashboardContent() {
   const [orderCustomerSearch, setOrderCustomerSearch] = useState("");
   const [orderFromDate, setOrderFromDate] = useState("");
   const [orderToDate, setOrderToDate] = useState("");
+  const [issuesLoading, setIssuesLoading] = useState(true);
+  const [issueStatusFilter, setIssueStatusFilter] = useState("open");
+  const [issueStatusDrafts, setIssueStatusDrafts] = useState<Record<string, OrderIssueStatus>>({});
+  const [issueNoteDrafts, setIssueNoteDrafts] = useState<Record<string, string>>({});
+  const [savingIssueId, setSavingIssueId] = useState("");
+  const notificationIds = useRef(new Set<string>());
+  const notificationHistoryLoaded = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -150,6 +189,64 @@ function AdminDashboardContent() {
       });
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    apiFetch<AdminOrderIssue[]>("/admin/order-issues")
+      .then((issues) => {
+        if (active) setOrderIssues(issues);
+      })
+      .catch((cause: unknown) => {
+        if (active) {
+          toast.error(
+            cause instanceof Error ? cause.message : "Could not load order issues.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setIssuesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshNotifications = async () => {
+      try {
+        const latest = await apiFetch<AdminNotification[]>("/admin/notifications");
+        if (!active) return;
+        if (notificationHistoryLoaded.current) {
+          const newNotifications = latest.filter(
+            (notification) => !notificationIds.current.has(notification._id),
+          );
+          newNotifications.forEach((notification) =>
+            toast.info(notification.title, { description: notification.message }),
+          );
+          if (newNotifications.length > 0) {
+            const latestIssues = await apiFetch<AdminOrderIssue[]>("/admin/order-issues");
+            if (active) setOrderIssues(latestIssues);
+          }
+        }
+        notificationIds.current = new Set(latest.map((notification) => notification._id));
+        notificationHistoryLoaded.current = true;
+        setNotifications(latest);
+      } catch (cause) {
+        if (active && !notificationHistoryLoaded.current) {
+          toast.error(
+            cause instanceof Error ? cause.message : "Could not load admin notifications.",
+          );
+        }
+      }
+    };
+    void refreshNotifications();
+    const timer = window.setInterval(() => void refreshNotifications(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
     };
   }, []);
 
@@ -306,6 +403,57 @@ function AdminDashboardContent() {
     }
   }
 
+  async function updateOrderIssue(
+    issue: AdminOrderIssue,
+    status: OrderIssueStatus,
+    orderAction?: "cancel",
+  ) {
+    setSavingIssueId(issue._id);
+    try {
+      const updated = await apiFetch<AdminOrderIssue>(
+        `/admin/order-issues/${issue._id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            status,
+            adminNote: issueNoteDrafts[issue._id] ?? issue.adminNote ?? "",
+            ...(orderAction ? { orderAction } : {}),
+          }),
+        },
+      );
+      setOrderIssues((current) =>
+        current.map((item) => (item._id === updated._id ? updated : item)),
+      );
+      toast.success(
+        orderAction === "cancel"
+          ? `Order #${issue.orderId.slice(-6)} cancelled and request resolved.`
+          : "Order request updated.",
+      );
+      if (orderAction === "cancel") void refreshOrders();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not update order request.");
+    } finally {
+      setSavingIssueId("");
+    }
+  }
+
+  async function markAdminNotificationRead(notification: AdminNotification) {
+    try {
+      await apiFetch<void>(`/admin/notifications/${notification._id}/read`, {
+        method: "PATCH",
+      });
+      setNotifications((current) =>
+        current.map((item) =>
+          item._id === notification._id ? { ...item, isRead: true } : item,
+        ),
+      );
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "Could not update notification.",
+      );
+    }
+  }
+
   const vendorNames = new Map<string, string>();
   const vendorOptions = Array.from(
     new Set(
@@ -336,6 +484,9 @@ function AdminDashboardContent() {
     const matchesTo = !orderToDate || orderDate <= orderToDate;
     return matchesStatus && matchesVendor && matchesCustomer && matchesFrom && matchesTo;
   });
+  const filteredOrderIssues = orderIssues.filter(
+    (issue) => issueStatusFilter === "all" || issue.status === issueStatusFilter,
+  );
 
   if (loading) {
     return <p className="py-16 text-center text-muted-foreground">Loading platform dashboard...</p>;
@@ -693,6 +844,11 @@ function AdminDashboardContent() {
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Vendor: {item.vendorName ?? (item.vendorId ? item.vendorId : "PizzaHub platform")} · Item status: {item.status.replaceAll("_", " ")}
                                   </p>
+                                  {item.rejectionReason && (
+                                    <p className="mt-2 text-xs text-red-600">
+                                      Rejection reason: {item.rejectionReason}
+                                    </p>
+                                  )}
                                 </div>
                                 <p className="font-bold">৳{item.subtotal}</p>
                               </div>
@@ -708,6 +864,165 @@ function AdminDashboardContent() {
                     </article>
                   ))
                 )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {section === "issues" && (
+          <section>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-black">Order issues</h2>
+                <p className="mt-1 text-muted-foreground">
+                  Review complaints, cancellations and refund requests.
+                </p>
+              </div>
+              <label className="grid gap-1 text-sm font-semibold">
+                Status
+                <select
+                  value={issueStatusFilter}
+                  onChange={(event) => setIssueStatusFilter(event.target.value)}
+                  className="rounded-lg border border-border bg-background px-3 py-2 font-normal capitalize"
+                >
+                  <option value="all">All requests</option>
+                  {(["open", "in_review", "resolved", "rejected"] as const).map((status) => (
+                    <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {issuesLoading ? (
+              <p className="mt-6 text-muted-foreground">Loading order issues...</p>
+            ) : filteredOrderIssues.length === 0 ? (
+              <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+                No order requests match this filter.
+              </p>
+            ) : (
+              <div className="mt-6 grid gap-4">
+                {filteredOrderIssues.map((issue) => (
+                  <article key={issue._id} className="rounded-2xl border border-border bg-card p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold capitalize">
+                          {issue.type} · Order #{issue.orderId.slice(-6)}
+                        </h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {issue.customerName} · {new Date(issue.createdAt).toLocaleString()} · ৳{issue.orderTotal}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold capitalize text-[#F26B4F]">
+                        {issue.status.replaceAll("_", " ")}
+                      </span>
+                    </div>
+                    <p className="mt-4 whitespace-pre-wrap text-sm">{issue.message}</p>
+                    {issue.type === "refund" && (
+                      <p className="mt-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+                        Record the payment-provider refund in the admin note before marking this request resolved.
+                      </p>
+                    )}
+                    <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+                      <label className="grid gap-1 text-sm font-semibold">
+                        Admin note
+                        <textarea
+                          rows={2}
+                          maxLength={1000}
+                          value={issueNoteDrafts[issue._id] ?? issue.adminNote ?? ""}
+                          onChange={(event) =>
+                            setIssueNoteDrafts((current) => ({
+                              ...current,
+                              [issue._id]: event.target.value,
+                            }))
+                          }
+                          className="resize-y rounded-lg border border-border bg-background px-3 py-2 font-normal"
+                          placeholder="Explain the action taken or what happens next."
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm font-semibold">
+                        Request status
+                        <select
+                          value={issueStatusDrafts[issue._id] ?? issue.status}
+                          onChange={(event) =>
+                            setIssueStatusDrafts((current) => ({
+                              ...current,
+                              [issue._id]: event.target.value as OrderIssueStatus,
+                            }))
+                          }
+                          className="rounded-lg border border-border bg-background px-3 py-2 font-normal capitalize"
+                        >
+                          {(["open", "in_review", "resolved", "rejected"] as const).map((status) => (
+                            <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        disabled={savingIssueId === issue._id}
+                        onClick={() =>
+                          void updateOrderIssue(
+                            issue,
+                            issueStatusDrafts[issue._id] ?? issue.status,
+                          )
+                        }
+                        className="self-end rounded-lg border border-border px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                      >
+                        Save request
+                      </button>
+                    </div>
+                    {issue.type === "cancellation" && issue.status !== "resolved" && issue.status !== "rejected" && (
+                      <button
+                        type="button"
+                        disabled={savingIssueId === issue._id}
+                        onClick={() => void updateOrderIssue(issue, "resolved", "cancel")}
+                        className="mt-3 rounded-lg bg-[#F26B4F] px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+                      >
+                        {savingIssueId === issue._id ? "Applying..." : "Approve cancellation and cancel order"}
+                      </button>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {section === "notifications" && (
+          <section>
+            <h2 className="text-2xl font-black">Admin notifications</h2>
+            <p className="mt-1 text-muted-foreground">
+              Vendor response alerts and customer order requests.
+            </p>
+            {notifications.length === 0 ? (
+              <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+                No admin notifications.
+              </p>
+            ) : (
+              <div className="mt-6 grid gap-3">
+                {notifications.map((notification) => (
+                  <article
+                    key={notification._id}
+                    className={`rounded-2xl border border-border bg-card p-5 ${notification.isRead ? "opacity-70" : ""}`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold">{notification.title}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Date(notification.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      {!notification.isRead && (
+                        <button
+                          type="button"
+                          onClick={() => void markAdminNotificationRead(notification)}
+                          className="text-sm font-semibold text-[#F26B4F] hover:underline"
+                        >
+                          Mark as read
+                        </button>
+                      )}
+                    </div>
+                    <p className="mt-3 text-sm">{notification.message}</p>
+                  </article>
+                ))}
               </div>
             )}
           </section>

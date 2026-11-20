@@ -28,6 +28,7 @@ type VendorOrder = {
     quantity: number;
     subtotal: number;
     status: string;
+    rejectionReason?: string;
   }>;
 };
 
@@ -120,6 +121,8 @@ function VendorDashboardContent() {
   const [savingStore, setSavingStore] = useState(false);
   const [refreshingOrders, setRefreshingOrders] = useState(false);
   const [savingOrderItem, setSavingOrderItem] = useState("");
+  const [rejectingOrderItemKey, setRejectingOrderItemKey] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState<"all" | VendorOrderStatus>("all");
   const [error, setError] = useState("");
 
@@ -261,6 +264,7 @@ function VendorDashboardContent() {
     order: VendorOrder,
     item: VendorOrder["items"][number],
     status: VendorOrderStatus,
+    reason?: string,
   ) {
     const key = `${order._id}:${item.itemId}`;
     setSavingOrderItem(key);
@@ -269,12 +273,19 @@ function VendorDashboardContent() {
         `/vendor/orders/${order._id}/items/${item.itemId}/status`,
         {
           method: "PATCH",
-          body: JSON.stringify({ status }),
+          body: JSON.stringify({
+            status,
+            ...(status === "rejected" ? { rejectionReason: reason?.trim() } : {}),
+          }),
         },
       );
       setOrders((current) =>
         current.map((entry) => (entry._id === updated._id ? updated : entry)),
       );
+      if (status === "rejected") {
+        setRejectingOrderItemKey("");
+        setRejectionReason("");
+      }
       toast.success("Order item status updated.");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not update order status.");
@@ -482,28 +493,82 @@ function VendorDashboardContent() {
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {currentStatus === "pending" ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    disabled={savingOrderItem === key}
-                                    onClick={() =>
-                                      void updateOrderItemStatus(order, item, "confirmed")
-                                    }
-                                    className="rounded-lg bg-green-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+                                rejectingOrderItemKey === key ? (
+                                  <form
+                                    onSubmit={(event) => {
+                                      event.preventDefault();
+                                      if (rejectionReason.trim().length < 5) {
+                                        toast.error("Add at least 5 characters explaining why this item is unavailable.");
+                                        return;
+                                      }
+                                      void updateOrderItemStatus(
+                                        order,
+                                        item,
+                                        "rejected",
+                                        rejectionReason,
+                                      );
+                                    }}
+                                    className="grid w-full gap-2"
                                   >
-                                    {savingOrderItem === key ? "Saving..." : "Accept"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={savingOrderItem === key}
-                                    onClick={() =>
-                                      void updateOrderItemStatus(order, item, "rejected")
-                                    }
-                                    className="rounded-lg border border-red-500/30 px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-60"
-                                  >
-                                    Reject
-                                  </button>
-                                </>
+                                    <label className="grid gap-1 text-xs font-semibold">
+                                      Reason this item cannot be fulfilled
+                                      <textarea
+                                        required
+                                        minLength={5}
+                                        maxLength={500}
+                                        rows={2}
+                                        value={rejectionReason}
+                                        onChange={(event) => setRejectionReason(event.target.value)}
+                                        className="resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm font-normal"
+                                        placeholder="For example: temporarily out of stock."
+                                      />
+                                    </label>
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="submit"
+                                        disabled={savingOrderItem === key}
+                                        className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+                                      >
+                                        {savingOrderItem === key ? "Saving..." : "Confirm rejection"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={savingOrderItem === key}
+                                        onClick={() => {
+                                          setRejectingOrderItemKey("");
+                                          setRejectionReason("");
+                                        }}
+                                        className="rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+                                      >
+                                        Keep order item
+                                      </button>
+                                    </div>
+                                  </form>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={savingOrderItem === key}
+                                      onClick={() =>
+                                        void updateOrderItemStatus(order, item, "confirmed")
+                                      }
+                                      className="rounded-lg bg-green-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+                                    >
+                                      {savingOrderItem === key ? "Saving..." : "Accept"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={savingOrderItem === key}
+                                      onClick={() => {
+                                        setRejectingOrderItemKey(key);
+                                        setRejectionReason("");
+                                      }}
+                                      className="rounded-lg border border-red-500/30 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-60"
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )
                               ) : nextStatuses.length > 0 ? (
                                 <select
                                   value={currentStatus}
