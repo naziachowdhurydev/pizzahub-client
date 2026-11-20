@@ -56,7 +56,8 @@ export function DashboardAccess({
     );
   }
 
-  if (user.role !== role) {
+  const hasAccess = user.role === role || (role === "vendor" && user.role === "admin");
+  if (!hasAccess) {
     return (
       <main className="mx-auto grid min-h-[65vh] max-w-3xl place-items-center px-5 py-16 text-center">
         <div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BarChart3, ClipboardList, Package, Store, Users } from "lucide-react";
+import { BarChart3, ClipboardList, Package, RefreshCw, Store, Users } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
@@ -81,6 +81,7 @@ function AdminDashboardContent() {
   const [applications, setApplications] = useState<VendorApplication[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [savingUserId, setSavingUserId] = useState("");
@@ -117,6 +118,19 @@ function AdminDashboardContent() {
       active = false;
     };
   }, []);
+
+  async function refreshAnalytics() {
+    setAnalyticsLoading(true);
+    try {
+      setAnalytics(await apiFetch<Analytics>("/admin/analytics"));
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "Could not refresh platform analytics.",
+      );
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }
 
   async function changeRole(user: UserAccount, role: UserAccount["role"]) {
     const userId = user.id ?? user._id;
@@ -170,8 +184,9 @@ function AdminDashboardContent() {
   ) {
     setReviewingId(application._id);
     try {
+      const action = status === "approved" ? "approve" : "reject";
       const updated = await apiFetch<VendorApplication>(
-        `/admin/vendors/${application._id}/${status}`,
+        `/admin/vendors/${application._id}/${action}`,
         { method: "PATCH" },
       );
       setApplications((current) => current.filter((item) => item._id !== updated._id));
@@ -191,6 +206,7 @@ function AdminDashboardContent() {
           ? `${application.storeName} was approved.`
           : `${application.storeName} was rejected.`,
       );
+      void refreshAnalytics();
     } catch (cause) {
       toast.error(
         cause instanceof Error ? cause.message : "Could not review application.",
@@ -238,6 +254,7 @@ function AdminDashboardContent() {
         current.map((item) => (item._id === order._id ? { ...item, status } : item)),
       );
       toast.success(`Order #${order._id.slice(-6)} updated.`);
+      void refreshAnalytics();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not update order status.");
     }
@@ -255,7 +272,10 @@ function AdminDashboardContent() {
             <button
               key={id}
               type="button"
-              onClick={() => setSection(id)}
+              onClick={() => {
+                setSection(id);
+                if (id === "analytics") void refreshAnalytics();
+              }}
               aria-current={section === id ? "page" : undefined}
               className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition ${
                 section === id
@@ -500,8 +520,21 @@ function AdminDashboardContent() {
 
         {section === "analytics" && analytics && (
           <section>
-            <h2 className="text-2xl font-black">Platform analytics</h2>
-            <p className="mt-1 text-muted-foreground">Revenue totals include delivered orders only.</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-black">Platform analytics</h2>
+                <p className="mt-1 text-muted-foreground">Revenue totals include delivered orders only.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void refreshAnalytics()}
+                disabled={analyticsLoading}
+                className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold hover:border-[#F26B4F] disabled:opacity-60"
+              >
+                <RefreshCw size={16} className={analyticsLoading ? "animate-spin" : ""} />
+                {analyticsLoading ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {[
                 ["Users", analytics.users],

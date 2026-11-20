@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
-import { getCurrentUser } from "@/lib/api";
+import { apiFetch, getCurrentUser } from "@/lib/api";
 import { dashboardPathForRole } from "@/lib/roles";
 import { Pizza, Mail, Lock, User, ArrowRight } from "lucide-react";
 
@@ -15,6 +15,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [signupRole, setSignupRole] = useState<"customer" | "vendor">("customer");
+  const [storeName, setStoreName] = useState("");
+  const [storeDescription, setStoreDescription] = useState("");
   const [busy, setBusy] = useState(false);
 
   const isRegister = mode === "register";
@@ -23,6 +26,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     e.preventDefault();
     setBusy(true);
     let authenticationCompleted = false;
+    let accountCreated = false;
 
     try {
       if (isRegister) {
@@ -38,6 +42,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         if (result.error) {
           throw new Error(result.error.message || "Registration failed");
         }
+        accountCreated = true;
       } else {
         const result = await authClient.signIn.email({
           email,
@@ -51,16 +56,37 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
       authenticationCompleted = true;
       const { user } = await getCurrentUser();
-      toast.success(isRegister ? "Account created. Welcome to PizzaHub!" : "Welcome back!");
+      if (isRegister && signupRole === "vendor") {
+        try {
+          await apiFetch("/vendors/apply", {
+            method: "POST",
+            body: JSON.stringify({ storeName, description: storeDescription }),
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Vendor application failed.";
+          toast.error(`Your account was created as a customer, but we couldn't submit the vendor application: ${message}`);
+          router.push(dashboardPathForRole(user.role));
+          router.refresh();
+          return;
+        }
+        toast.success("Account created. Your vendor application is pending review.");
+      } else {
+        toast.success(isRegister ? "Account created. Welcome to PizzaHub!" : "Welcome back!");
+      }
       router.push(dashboardPathForRole(user.role));
       router.refresh();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Something went wrong";
       toast.error(
-        authenticationCompleted
-          ? `${isRegister ? "Your account was created" : "You were signed in"}, but we couldn't load your account role: ${message}`
-          : message,
+        accountCreated && signupRole === "vendor"
+          ? `Your account was created as a customer, but we couldn't submit the vendor application: ${message}`
+          : accountCreated
+            ? `Your account was created, but we couldn't load its role: ${message}`
+            : authenticationCompleted
+              ? `You were signed in, but we couldn't load your account role: ${message}`
+              : message,
       );
     } finally {
       setBusy(false);
@@ -88,7 +114,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           {isRegister
             ? "Join PizzaHub and order your favourite slices."
-            : "Log in to continue enjoying your favourite pizza."}
+            : "Log in and we’ll take you to the dashboard assigned to your account."}
         </p>
       </div>
 
@@ -111,6 +137,54 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               />
             </div>
           </label>
+        )}
+
+        {isRegister && (
+          <>
+            <label className="block text-sm font-semibold">
+              I’m here as
+              <select
+                value={signupRole}
+                onChange={(event) =>
+                  setSignupRole(event.currentTarget.value === "vendor" ? "vendor" : "customer")
+                }
+                className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground outline-none transition focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15"
+              >
+                <option value="customer">A pizza lover (Customer)</option>
+                <option value="vendor">A pizzeria owner (Vendor applicant)</option>
+              </select>
+            </label>
+            {signupRole === "vendor" && (
+              <div className="grid gap-4 rounded-2xl border border-[#F26B4F]/20 bg-[#F26B4F]/5 p-4">
+                <label className="block text-sm font-semibold">
+                  Store name
+                  <input
+                    required
+                    maxLength={100}
+                    value={storeName}
+                    onChange={(event) => setStoreName(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 font-normal text-foreground outline-none focus:border-[#F26B4F]"
+                    placeholder="Your pizzeria name"
+                  />
+                </label>
+                <label className="block text-sm font-semibold">
+                  About your store
+                  <textarea
+                    required
+                    maxLength={1000}
+                    rows={3}
+                    value={storeDescription}
+                    onChange={(event) => setStoreDescription(event.target.value)}
+                    className="mt-2 w-full resize-y rounded-xl border border-border bg-background px-4 py-3 font-normal text-foreground outline-none focus:border-[#F26B4F]"
+                    placeholder="Tell us what you make"
+                  />
+                </label>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Your account stays a customer account until an admin approves your vendor application.
+                </p>
+              </div>
+            )}
+          </>
         )}
 
         <label className="block text-sm font-semibold">
@@ -172,6 +246,11 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           {isRegister ? "Log in" : "Create account"}
         </Link>
       </p>
+      {isRegister && (
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          Admin access is reserved and cannot be created through public registration.
+        </p>
+      )}
     </section>
   );
 }

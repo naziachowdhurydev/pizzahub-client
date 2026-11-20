@@ -114,13 +114,21 @@ export function SiteHeader() {
           )}
 
           {isAdmin && (
-            <Link
-              href="/dashboard/admin"
-              className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
-            >
-              <LayoutDashboard size={17} />
-              Admin
-            </Link>
+            <>
+              <Link
+                href="/dashboard/admin"
+                className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
+              >
+                <LayoutDashboard size={17} />
+                Admin Dashboard
+              </Link>
+              <Link
+                href="/dashboard/vendor"
+                className="text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
+              >
+                Vendor View
+              </Link>
+            </>
           )}
         </nav>
 
@@ -233,13 +241,22 @@ export function SiteHeader() {
             )}
 
             {isAdmin && (
-              <Link
-                href="/dashboard/admin"
-                onClick={() => setOpen(false)}
-                className="font-semibold text-foreground hover:text-[#F26B4F]"
-              >
-                Admin Dashboard
-              </Link>
+              <>
+                <Link
+                  href="/dashboard/admin"
+                  onClick={() => setOpen(false)}
+                  className="font-semibold text-foreground hover:text-[#F26B4F]"
+                >
+                  Admin Dashboard
+                </Link>
+                <Link
+                  href="/dashboard/vendor"
+                  onClick={() => setOpen(false)}
+                  className="font-semibold text-foreground hover:text-[#F26B4F]"
+                >
+                  Vendor View
+                </Link>
+              </>
             )}
 
             <Link
