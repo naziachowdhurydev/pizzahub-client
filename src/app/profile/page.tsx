@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { apiFetch, uploadProfileImage } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { normalizeOptionalImageUrl } from "@/lib/image-url";
 import { notifyUserUpdated } from "@/lib/user-events";
 import { toast } from "sonner";
@@ -15,9 +15,7 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const savingRef = useRef(false);
-  const uploadingRef = useRef(false);
 
   useEffect(() => {
     apiFetch<CurrentUserProfile>("/users/me")
@@ -60,36 +58,6 @@ export default function ProfilePage() {
     } finally {
       savingRef.current = false;
       setSaving(false);
-    }
-  }
-
-  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file || uploadingRef.current) return;
-
-    uploadingRef.current = true;
-    setUploading(true);
-    try {
-      const imageUrl = await uploadProfileImage(file);
-      const result = await authClient.updateUser({ image: imageUrl });
-      if (result?.error) {
-        throw new Error(result.error.message || "Could not save your new photo.");
-      }
-
-      const refreshed = await apiFetch<CurrentUserProfile>("/users/me");
-      setProfile(refreshed);
-      setName(refreshed.user.name ?? "");
-      setImageUrl(refreshed.user.image ?? "");
-      notifyUserUpdated();
-      toast.success("Profile image uploaded.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not upload that image.",
-      );
-    } finally {
-      uploadingRef.current = false;
-      setUploading(false);
-      event.target.value = "";
     }
   }
 
@@ -168,7 +136,8 @@ export default function ProfilePage() {
           <label className="block text-sm font-semibold sm:col-span-2">
             Image URL{" "}
             <span className="font-normal text-muted-foreground">
-              (optional — leave blank to remove your photo)
+              (optional — paste an image link such as an ImgBB URL; leave blank to
+              remove your photo)
             </span>
             <input
               type="url"
@@ -179,29 +148,9 @@ export default function ProfilePage() {
             />
           </label>
 
-          <label className="block text-sm font-semibold sm:col-span-2">
-            Upload profile image
-            <span className="font-normal text-muted-foreground">
-              {" "}
-              — PNG, JPG, WEBP or GIF up to 5 MB. Stored securely through ImgBB.
-            </span>
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              onChange={(event) => void handleImageUpload(event)}
-              disabled={uploading || saving}
-              className="mt-2 block w-full cursor-pointer rounded-xl border border-border bg-background px-4 py-3 text-sm font-normal text-foreground file:mr-4 file:rounded-lg file:border-0 file:bg-[#F26B4F] file:px-4 file:py-2 file:font-bold file:text-white hover:file:bg-[#D95338] disabled:cursor-not-allowed disabled:opacity-60"
-            />
-            {uploading && (
-              <span className="mt-2 block text-xs text-muted-foreground">
-                Uploading image...
-              </span>
-            )}
-          </label>
-
           <button
             type="submit"
-            disabled={saving || uploading}
+            disabled={saving}
             className="inline-flex w-fit items-center gap-2 rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white transition hover:bg-[#D95338] disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
           >
             <Save size={17} />
