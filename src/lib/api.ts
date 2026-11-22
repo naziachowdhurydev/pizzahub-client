@@ -64,6 +64,39 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return result.data as T;
 }
 
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
+
+function readImageAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Could not read that image."));
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function uploadProfileImage(file: File): Promise<string> {
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+    throw new Error("Choose a PNG, JPG, WEBP or GIF image.");
+  }
+  if (file.size > MAX_PROFILE_IMAGE_BYTES) {
+    throw new Error("Image must be 5 MB or smaller.");
+  }
+
+  const image = await readImageAsDataUrl(file);
+  const result = await apiFetch<{ url: string }>("/users/me/image", {
+    method: "POST",
+    body: JSON.stringify({ image }),
+  });
+  return result.url;
+}
+
 export async function getCurrentUser(): Promise<CurrentUserProfile> {
   const profile = await apiFetch<CurrentUserProfile>("/users/me");
   if (!isUserRole(profile.user?.role)) {
