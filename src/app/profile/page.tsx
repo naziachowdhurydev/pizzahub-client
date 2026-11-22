@@ -6,12 +6,13 @@ import { apiFetch } from "@/lib/api";
 import { normalizeOptionalImageUrl } from "@/lib/image-url";
 import { notifyUserUpdated } from "@/lib/user-events";
 import { toast } from "sonner";
-import { CalendarDays, Save, ShieldCheck, UserRound } from "lucide-react";
+import { CalendarDays, Pencil, Save, ShieldCheck, UserRound } from "lucide-react";
 import type { CurrentUserProfile } from "@/types";
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
@@ -48,7 +49,9 @@ export default function ProfilePage() {
 
       const refreshed = await apiFetch<CurrentUserProfile>("/users/me");
       setProfile(refreshed);
+      setName(refreshed.user.name ?? "");
       setImageUrl(refreshed.user.image ?? "");
+      setEditing(false);
       notifyUserUpdated();
       toast.success("Profile updated.");
     } catch (error) {
@@ -127,8 +130,9 @@ export default function ProfilePage() {
               required
               minLength={2}
               value={name}
+              disabled={!editing || saving}
               onChange={(event) => setName(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 font-normal text-foreground outline-none transition focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15"
+              className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 font-normal text-foreground outline-none transition focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15 disabled:cursor-not-allowed disabled:opacity-70"
               placeholder="Your name"
             />
           </label>
@@ -142,20 +146,36 @@ export default function ProfilePage() {
             <input
               type="url"
               value={imageUrl}
+              disabled={!editing || saving}
               onChange={(event) => setImageUrl(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 font-normal text-foreground outline-none transition focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15"
+              className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 font-normal text-foreground outline-none transition focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15 disabled:cursor-not-allowed disabled:opacity-70"
               placeholder="https://example.com/avatar.jpg"
             />
           </label>
 
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex w-fit items-center gap-2 rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white transition hover:bg-[#D95338] disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
-          >
-            <Save size={17} />
-            {saving ? "Saving..." : "Save profile"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+            <button
+              type="button"
+              onClick={() => {
+                setName(profile.user.name ?? "");
+                setImageUrl(profile.user.image ?? "");
+                setEditing(true);
+              }}
+              disabled={editing || saving}
+              className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#F26B4F] px-5 py-3 font-bold text-[#F26B4F] transition hover:bg-[#F26B4F]/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Pencil size={17} />
+              Update
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex w-fit items-center gap-2 rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white transition hover:bg-[#D95338] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Save size={17} />
+              {saving ? "Saving..." : "Save profile"}
+            </button>
+          </div>
         </form>
 
         <div className="mt-8 grid gap-4 border-t border-border pt-6 sm:grid-cols-2">
