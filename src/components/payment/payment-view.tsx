@@ -107,11 +107,32 @@ export function PaymentView({ orderId }: { orderId?: string }) {
 
     if (selectedMethod === "stripe") {
       setProcessingPayment(true);
-      toast.info("Preparing Stripe Checkout session...");
-      setTimeout(() => {
-        setProcessingPayment(false);
+      toast.info("Connecting to Stripe Checkout...");
+      try {
+        const response = await fetch("/api/payment/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: currentOrder.orderId,
+            total: currentOrder.total,
+            items: currentOrder.items,
+          }),
+        });
+        const result = await response.json();
+        if (result.success && result.url) {
+          window.location.href = result.url;
+          return;
+        }
+        // If Stripe returns an error or preview mode is requested, open test modal
+        if (result.message) {
+          toast.info(result.message);
+        }
         setStripeModalOpen(true);
-      }, 600);
+      } catch {
+        setStripeModalOpen(true);
+      } finally {
+        setProcessingPayment(false);
+      }
       return;
     }
 
