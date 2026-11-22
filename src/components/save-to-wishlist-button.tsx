@@ -1,41 +1,47 @@
 "use client";
 
-import { useState } from "react";
 import { Heart } from "lucide-react";
 import { toast } from "sonner";
-import { apiFetch } from "@/lib/api";
-import { authClient } from "@/lib/auth-client";
+import { useWishlist } from "@/components/wishlist-provider";
 
 export function SaveToWishlistButton({ productId }: { productId: string }) {
-  const { data: session, isPending } = authClient.useSession();
-  const user = session?.user;
-  const role = (user as (typeof user & { role?: string }) | null)?.role;
-  const [saving, setSaving] = useState(false);
+  const { canUseWishlist, isSaved, toggleProduct, pendingId, loading } =
+    useWishlist();
+  const saved = isSaved(productId);
+  const busy = pendingId === productId;
 
-  if (isPending || role !== "customer") return null;
+  if (!canUseWishlist) return null;
 
-  async function save() {
-    setSaving(true);
+  async function toggle() {
     try {
-      await apiFetch<void>(`/customer/wishlist/${productId}`, { method: "POST" });
-      toast.success("Pizza saved to your wishlist.");
+      const nextSaved = await toggleProduct(productId);
+      toast.success(
+        nextSaved
+          ? "Pizza saved to your wishlist."
+          : "Pizza removed from your wishlist.",
+      );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this pizza.");
-    } finally {
-      setSaving(false);
+      toast.error(
+        error instanceof Error ? error.message : "Could not update your wishlist.",
+      );
     }
   }
 
   return (
     <button
       type="button"
-      onClick={save}
-      disabled={saving}
-      aria-label="Save pizza to wishlist"
+      onClick={() => void toggle()}
+      disabled={busy || loading}
+      aria-label={saved ? "Remove pizza from wishlist" : "Save pizza to wishlist"}
+      aria-pressed={saved}
       className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:border-[#F26B4F] hover:text-[#F26B4F] disabled:opacity-60"
     >
-      <Heart size={14} />
-      {saving ? "Saving..." : "Save"}
+      <Heart
+        size={14}
+        fill={saved ? "currentColor" : "none"}
+        className={saved ? "text-[#F26B4F]" : undefined}
+      />
+      {busy ? "Saving..." : saved ? "Saved" : "Save"}
     </button>
   );
 }

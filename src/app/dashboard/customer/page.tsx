@@ -8,6 +8,10 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
+import {
+  WISHLIST_UPDATED_EVENT,
+  notifyWishlistUpdated,
+} from "@/lib/wishlist-events";
 import type { Product } from "@/types";
 
 type Order = {
@@ -167,6 +171,27 @@ function CustomerDashboardContent() {
       });
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const refreshWishlist = async () => {
+      try {
+        const items = await apiFetch<Product[]>("/customer/wishlist");
+        if (active) setWishlist(items);
+      } catch {
+        // The next navigation or reload will retry the wishlist sync.
+      }
+    };
+
+    const handleWishlistUpdate = () => void refreshWishlist();
+    window.addEventListener(WISHLIST_UPDATED_EVENT, handleWishlistUpdate);
+
+    return () => {
+      active = false;
+      window.removeEventListener(WISHLIST_UPDATED_EVENT, handleWishlistUpdate);
     };
   }, []);
 
@@ -358,6 +383,7 @@ function CustomerDashboardContent() {
         method: "DELETE",
       });
       setWishlist((current) => current.filter((item) => item._id !== product._id));
+      notifyWishlistUpdated();
       toast.success(`${product.name} removed from your wishlist.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update wishlist.");

@@ -8,9 +8,18 @@ import { toast } from "sonner";
 import { ProductGrid } from "@/components/product-grid";
 import { SaveToWishlistButton } from "@/components/save-to-wishlist-button";
 import { apiFetch } from "@/lib/api";
-import { notifyCartUpdated } from "@/lib/cart-events";
+import {
+  CART_UPDATED_EVENT,
+  notifyCartUpdated,
+} from "@/lib/cart-events";
 import { authClient } from "@/lib/auth-client";
 import type { Product } from "@/types";
+
+type CartItemRef = {
+  productId: string;
+  size: string;
+  quantity: number;
+};
 
 export function ProductDetails({
   product: initialProduct,
@@ -26,10 +35,13 @@ export function ProductDetails({
     | (typeof sessionUser & { id?: string; role?: string })
     | null;
   const role = user?.role ?? (user ? "customer" : null);
+  const userId = user?.id;
   const [product, setProduct] = useState(initialProduct);
   const [size, setSize] = useState(initialProduct.sizes[0] ?? "Regular");
   const [quantity, setQuantity] = useState(1);
   const [savingCart, setSavingCart] = useState(false);
+  const [cartItems, setCartItems] = useState<CartItemRef[]>([]);
+  const [addedToCart, setAddedToCart] = useState(false);
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [phone, setPhone] = useState("");
@@ -40,6 +52,39 @@ export function ProductDetails({
   const [available, setAvailable] = useState(initialProduct.isAvailable);
   const [featured, setFeatured] = useState(initialProduct.isFeatured);
 
+  const canUseCart = !isPending && !!userId && role === "customer";
+
+  useEffect(() => {
+    let active = true;
+
+    if (!canUseCart) return;
+
+    async function loadCart() {
+      try {
+        const cart = await apiFetch<{ items: CartItemRef[] }>("/cart");
+        if (active) setCartItems(cart.items ?? []);
+      } catch {
+        if (active) setCartItems([]);
+      }
+    }
+
+    void loadCart();
+    const handleCartUpdate = () => void loadCart();
+    window.addEventListener(CART_UPDATED_EVENT, handleCartUpdate);
+
+    return () => {
+      active = false;
+      window.removeEventListener(CART_UPDATED_EVENT, handleCartUpdate);
+    };
+  }, [canUseCart]);
+
+  const existingCartItem = canUseCart
+    ? cartItems.find(
+        (item) => item.productId === product._id && item.size === size,
+      )
+    : undefined;
+  const isExistingItem = Boolean(existingCartItem);
+
   const isVendorOwner =
     role === "vendor" &&
     Boolean(user?.id) &&
@@ -48,7 +93,7 @@ export function ProductDetails({
   async function addToCart() {
     setSavingCart(true);
     try {
-      await apiFetch<void>("/cart/items", {
+      await apiFetch<{ itemCount: number }>("/cart/items", {
         method: "POST",
         body: JSON.stringify({
           productId: product._id,
@@ -56,7 +101,18 @@ export function ProductDetails({
           quantity,
         }),
       });
-      toast.success(`${product.name} added to your cart.`);
+      setCartItems((current) => [
+        ...current.filter(
+          (item) => item.productId !== product._id || item.size !== size,
+        ),
+        { productId: product._id, size, quantity },
+      ]);
+      setAddedToCart(true);
+      toast.success(
+        isExistingItem
+          ? `${product.name} updated in your cart.`
+          : `${product.name} added to your cart.`,
+      );
       notifyCartUpdated();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not add this pizza to your cart.");
@@ -189,7 +245,10 @@ export function ProductDetails({
                   key={option}
                   type="button"
                   aria-pressed={size === option}
-                  onClick={() => setSize(option)}
+                  onClick={() => {
+                    setSize(option);
+                    setAddedToCart(false);
+                  }}
                   className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
                     size === option
                       ? "border-[#F26B4F] bg-orange-500/10 text-[#F26B4F]"
@@ -209,7 +268,10 @@ export function ProductDetails({
                   type="button"
                   aria-label="Decrease quantity"
                   disabled={quantity <= 1}
-                  onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+                  onClick={() => {
+                    setQuantity((current) => Math.max(1, current - 1));
+                    setAddedToCart(false);
+                  }}
                   className="px-3 py-2.5 text-lg disabled:opacity-40"
                 >
                   −
@@ -219,7 +281,10 @@ export function ProductDetails({
                   type="button"
                   aria-label="Increase quantity"
                   disabled={quantity >= 20}
-                  onClick={() => setQuantity((current) => Math.min(20, current + 1))}
+                  onClick={() => {
+                    setQuantity((current) => Math.min(20, current + 1));
+                    setAddedToCart(false);
+                  }}
                   className="px-3 py-2.5 text-lg disabled:opacity-40"
                 >
                   +
@@ -232,7 +297,13 @@ export function ProductDetails({
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white transition hover:bg-[#D95338] disabled:opacity-60"
               >
                 <ShoppingBag size={18} />
-                {savingCart ? "Adding..." : "Add to cart"}
+                {savingCart
+                  ? "Adding..."
+                  : addedToCart
+                    ? "Added to Cart"
+                    : isExistingItem
+                      ? "Update Cart"
+                      : "Add to Cart"}
               </button>
               <button
                 type="button"
