@@ -2,9 +2,10 @@ import Link from "next/link";
 import { ArrowRight, Flame, Clock3, Truck } from "lucide-react";
 import { ProductGrid } from "@/components/product-grid";
 import { getProducts } from "@/lib/api";
+import type { Product } from "@/types";
 
 export default async function HomePage() {
-  let products = [];
+  let products: Product[] = [];
   try { products = await getProducts(); } catch { /* API may not be started yet */ }
 
   return (

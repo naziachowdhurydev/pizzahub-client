@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { LoaderCircle, Package, Star, Tags, Utensils } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import type { Product } from "@/types";
@@ -41,7 +42,7 @@ type ApprovedVendor = {
   name: string;
 };
 
-export default function AdminPage() {
+function AdminPageContent() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const user = session?.user;
   const isAdmin =
@@ -575,5 +576,13 @@ export default function AdminPage() {
         onConfirm={() => void deleteProduct()}
       />
     </main>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <DashboardAccess role="admin">
+      <AdminPageContent />
+    </DashboardAccess>
   );
 }

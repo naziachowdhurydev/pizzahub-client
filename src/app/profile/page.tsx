@@ -30,8 +30,8 @@ export default function ProfilePage() {
         <div><h2 className="text-2xl font-bold">{user.name}</h2><p className="mt-1 text-muted-foreground">{user.email}</p><span className="mt-3 inline-flex rounded-full bg-orange-500/15 px-3 py-1 text-xs font-bold uppercase text-orange-400">{user.role || "customer"}</span></div>
       </div>
       <div className="mt-8 grid gap-4 border-t border-border pt-6 sm:grid-cols-2">
-        <div className="flex gap-3"><ShieldCheck className="text-orange-400"/><div><p className="text-xs text-muted-foreground">Session ID</p><p className="break-all text-sm">{session.id}</p></div></div>
-        <div className="flex gap-3"><CalendarDays className="text-orange-400"/><div><p className="text-xs text-muted-foreground">Session expires</p><p className="text-sm">{new Date(session.expiresAt).toLocaleString()}</p></div></div>
+        <div className="flex gap-3"><ShieldCheck className="text-orange-400"/><div><p className="text-xs text-muted-foreground">Session ID</p><p className="break-all text-sm">{session?.id ?? "No active session"}</p></div></div>
+        <div className="flex gap-3"><CalendarDays className="text-orange-400"/><div><p className="text-xs text-muted-foreground">Session expires</p><p className="text-sm">{session ? new Date(session.expiresAt).toLocaleString() : "N/A"}</p></div></div>
       </div>
       <button onClick={logout} className="mt-8 rounded-xl border border-red-500/30 px-5 py-3 font-semibold text-red-300 hover:bg-red-500/10">Log out</button>
     </section>

@@ -1,10 +1,11 @@
 import { ProductGrid } from "@/components/product-grid";
 import { getProducts } from "@/lib/api";
+import type { Product } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function MenuPage() {
-  let products = [];
+  let products: Product[] = [];
   let error = "";
   try { products = await getProducts(); } catch { error = "Could not connect to the PizzaHub API. Start the server and seed demo data."; }
   return <main className="mx-auto min-h-[65vh] max-w-7xl px-5 py-14 md:px-8">

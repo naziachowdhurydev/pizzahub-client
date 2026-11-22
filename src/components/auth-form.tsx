@@ -1,16 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { apiFetch, getCurrentUser } from "@/lib/api";
 import { dashboardPathForRole } from "@/lib/roles";
+import { useCurrentUser } from "@/lib/use-current-user";
 import { Pizza, Mail, Lock, User, ArrowRight } from "lucide-react";
 
-export function AuthForm({ mode }: { mode: "login" | "register" }) {
+function isRouteAllowedForRole(pathname: string, role: "customer" | "vendor" | "admin"): boolean {
+  if (pathname === "/" || pathname.startsWith("/menu") || pathname.startsWith("/profile")) {
+    return true;
+  }
+  if (role === "admin") {
+    return true;
+  }
+  if (role === "vendor") {
+    if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard/admin")) {
+      return false;
+    }
+    return pathname.startsWith("/dashboard/vendor");
+  }
+  if (role === "customer") {
+    if (
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/dashboard/admin") ||
+      pathname.startsWith("/dashboard/vendor")
+    ) {
+      return false;
+    }
+    return (
+      pathname.startsWith("/dashboard/customer") ||
+      pathname === "/cart" ||
+      pathname.startsWith("/cart") ||
+      pathname === "/checkout" ||
+      pathname.startsWith("/checkout")
+    );
+  }
+  return false;
+}
+
+export function AuthForm({
+  mode,
+  callbackUrl,
+}: {
+  mode: "login" | "register";
+  callbackUrl?: string;
+}) {
   const router = useRouter();
+  const { user: alreadyLoggedInUser, loading: sessionLoading } = useCurrentUser();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -21,6 +61,13 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [busy, setBusy] = useState(false);
 
   const isRegister = mode === "register";
+
+  // If user is already logged in, redirect them away from login/register to their dashboard
+  useEffect(() => {
+    if (!sessionLoading && alreadyLoggedInUser) {
+      router.replace(dashboardPathForRole(alreadyLoggedInUser.role));
+    }
+  }, [alreadyLoggedInUser, sessionLoading, router]);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -74,7 +121,23 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       } else {
         toast.success(isRegister ? "Account created. Welcome to PizzaHub!" : "Welcome back!");
       }
-      router.push(dashboardPathForRole(user.role));
+
+      // Check whether destination callbackUrl is permitted for user's actual database role
+      let targetUrl = dashboardPathForRole(user.role);
+      if (
+        !isRegister &&
+        callbackUrl &&
+        callbackUrl.startsWith("/") &&
+        !callbackUrl.startsWith("//") &&
+        !callbackUrl.includes("\\")
+      ) {
+        const urlPath = callbackUrl.split("?")[0];
+        if (isRouteAllowedForRole(urlPath, user.role)) {
+          targetUrl = callbackUrl;
+        }
+      }
+
+      router.push(targetUrl);
       router.refresh();
     } catch (error) {
       const message =

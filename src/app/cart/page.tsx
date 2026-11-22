@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { notifyCartUpdated } from "@/lib/cart-events";
+import { dashboardPathForRole } from "@/lib/roles";
 
 type CartItem = {
   productId: string;
@@ -41,6 +43,7 @@ type PlacedOrder = {
 const emptyCart: CartResponse = { items: [], subtotal: 0, itemCount: 0 };
 
 export default function CartPage() {
+  const router = useRouter();
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const user = session?.user;
   const role = (user as (typeof user & { role?: string }) | null)?.role ?? "customer";
@@ -51,6 +54,12 @@ export default function CartPage() {
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [placedOrder, setPlacedOrder] = useState<PlacedOrder | null>(null);
+
+  useEffect(() => {
+    if (!sessionPending && !user) {
+      router.replace("/login?callbackUrl=%2Fcart");
+    }
+  }, [sessionPending, user, router]);
 
   useEffect(() => {
     let active = true;
@@ -186,8 +195,8 @@ export default function CartPage() {
       <main className="mx-auto grid min-h-[65vh] max-w-3xl place-items-center px-5 py-16 text-center">
         <div>
           <h1 className="text-3xl font-black">Log in to view your cart</h1>
-          <p className="mt-3 text-muted-foreground">Your cart is connected to your customer account.</p>
-          <Link href="/login" className="mt-6 inline-flex rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white">
+          <p className="mt-3 text-muted-foreground">Redirecting to login...</p>
+          <Link href="/login?callbackUrl=%2Fcart" className="mt-6 inline-flex rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white">
             Log in
           </Link>
         </div>
@@ -368,6 +377,12 @@ export default function CartPage() {
               >
                 {checkingOut ? "Placing order..." : "Place order"}
               </button>
+              <Link
+                href="/checkout"
+                className="block text-center text-xs font-semibold text-[#F26B4F] hover:underline"
+              >
+                Go to full checkout page →
+              </Link>
               {cart.items.some((item) => !item.isAvailable) && (
                 <p className="text-sm text-red-500">
                   Remove unavailable products before placing your order.

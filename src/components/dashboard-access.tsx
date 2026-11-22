@@ -1,7 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { dashboardPathForRole } from "@/lib/roles";
 import { useCurrentUser } from "@/lib/use-current-user";
 
@@ -15,6 +17,15 @@ export function DashboardAccess({
   children: ReactNode;
 }) {
   const { user, loading, error, retry } = useCurrentUser();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      const callbackUrl = encodeURIComponent(pathname);
+      router.replace(`/login?callbackUrl=${callbackUrl}`);
+    }
+  }, [loading, user, pathname, router]);
 
   if (loading) {
     return (
@@ -47,8 +58,11 @@ export function DashboardAccess({
       <main className="mx-auto grid min-h-[65vh] max-w-3xl place-items-center px-5 py-16 text-center">
         <div>
           <h1 className="text-3xl font-black">Sign in to continue</h1>
-          <p className="mt-3 text-muted-foreground">Your dashboard is available after you log in.</p>
-          <Link href="/login" className="mt-6 inline-flex rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white">
+          <p className="mt-3 text-muted-foreground">Redirecting to login...</p>
+          <Link
+            href={`/login?callbackUrl=${encodeURIComponent(pathname)}`}
+            className="mt-6 inline-flex rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white"
+          >
             Log in
           </Link>
         </div>
