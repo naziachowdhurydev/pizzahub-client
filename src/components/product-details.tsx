@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Clock3, ShoppingBag, Star } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, Clock3, ShoppingBag, Star } from "lucide-react";
 import { toast } from "sonner";
 import { ProductGrid } from "@/components/product-grid";
 import { SaveToWishlistButton } from "@/components/save-to-wishlist-button";
@@ -13,6 +12,8 @@ import {
   notifyCartUpdated,
 } from "@/lib/cart-events";
 import { authClient } from "@/lib/auth-client";
+import { todayForDateInput, validateDeliveryDate } from "@/lib/delivery-date";
+import { formatOrderStatus } from "@/lib/order-status";
 import type { Product } from "@/types";
 
 type CartItemRef = {
@@ -28,7 +29,6 @@ export function ProductDetails({
   product: Product;
   relatedProducts: Product[];
 }) {
-  const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const sessionUser = session?.user;
   const user = sessionUser as
@@ -44,10 +44,16 @@ export function ProductDetails({
   const [cartItems, setCartItems] = useState<CartItemRef[]>([]);
   const [addedToCart, setAddedToCart] = useState(false);
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [deliveryDate, setDeliveryDate] = useState(todayForDateInput);
   const [deliveryAddress, setDeliveryAddress] = useState("");
-  const [phone, setPhone] = useState("");
+  const [notes, setNotes] = useState("");
+  const [orderError, setOrderError] = useState("");
   const [savingOrder, setSavingOrder] = useState(false);
-  const [placedOrderId, setPlacedOrderId] = useState("");
+  const [placedOrder, setPlacedOrder] = useState<{
+    _id: string;
+    status?: string;
+    deliveryDate?: string;
+  } | null>(null);
   const [savingDetails, setSavingDetails] = useState(false);
   const [price, setPrice] = useState(String(initialProduct.price));
   const [available, setAvailable] = useState(initialProduct.isAvailable);
@@ -127,22 +133,42 @@ export function ProductDetails({
 
   async function placeOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const dateError = validateDeliveryDate(deliveryDate);
+    if (dateError) {
+      setOrderError(dateError);
+      toast.error(dateError);
+      return;
+    }
+    if (deliveryAddress.trim().length < 5) {
+      const message = "Enter a complete delivery address.";
+      setOrderError(message);
+      toast.error(message);
+      return;
+    }
+
+    setOrderError("");
     setSavingOrder(true);
     try {
-      const order = await apiFetch<{ _id: string }>("/orders", {
+      const order = await apiFetch<{
+        _id: string;
+        status?: string;
+        deliveryDate?: string;
+      }>("/orders", {
         method: "POST",
         body: JSON.stringify({
           items: [{ productId: product._id, size, quantity }],
+          deliveryDate,
           deliveryAddress: deliveryAddress.trim(),
-          phone: phone.trim(),
+          notes: notes.trim(),
         }),
       });
-      setPlacedOrderId(order._id);
+      setPlacedOrder(order);
       setShowOrderForm(false);
-      toast.success(`${product.name} ordered! Proceeding to payment...`);
-      router.push(`/payment?orderId=${order._id}`);
+      toast.success("Order placed successfully. Status: Pending.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not place your order.");
+      const message = error instanceof Error ? error.message : "Could not place your order.";
+      setOrderError(message);
+      toast.error(message);
     } finally {
       setSavingOrder(false);
     }
@@ -198,11 +224,18 @@ export function ProductDetails({
             alt={product.name}
             className="aspect-[4/3] w-full object-cover"
           />
-          {product.isFeatured && (
-            <span className="absolute left-5 top-5 rounded-full bg-orange-500 px-4 py-2 text-xs font-black text-black">
-              CUSTOMER FAVOURITE
-            </span>
-          )}
+          <span className="absolute left-5 top-5 flex flex-col items-start gap-2">
+            {product.vendorPlan === "premium" && (
+              <span className="rounded-full bg-[#F26B4F] px-4 py-1.5 text-xs font-black uppercase tracking-wide text-white">
+                Premium vendor
+              </span>
+            )}
+            {product.isFeatured && (
+              <span className="rounded-full bg-orange-500 px-4 py-2 text-xs font-black text-black">
+                CUSTOMER FAVOURITE
+              </span>
+            )}
+          </span>
         </div>
 
         <div className="flex flex-col justify-center">
@@ -329,11 +362,31 @@ export function ProductDetails({
               onSubmit={placeOrder}
               className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2"
             >
-              <h2 className="font-bold sm:col-span-2">Delivery details</h2>
+              <h2 className="font-bold sm:col-span-2">Order details</h2>
+              <div className="rounded-xl bg-muted/60 p-3 text-xs leading-5 text-muted-foreground sm:col-span-2">
+                <p><span className="font-semibold text-foreground">Customer:</span> {sessionUser?.name ?? "You"}</p>
+                <p><span className="font-semibold text-foreground">Vendor:</span> {product.vendorName ?? "PizzaHub"}</p>
+                <p><span className="font-semibold text-foreground">Item:</span> {product.name} · {size} × {quantity}</p>
+              </div>
+              <label className="grid gap-1.5 text-sm font-medium">
+                Delivery date
+                <span className="relative">
+                  <CalendarDays size={16} className="pointer-events-none absolute left-3 top-3.5 text-muted-foreground" />
+                  <input
+                    required
+                    type="date"
+                    min={todayForDateInput()}
+                    value={deliveryDate}
+                    onChange={(event) => setDeliveryDate(event.target.value)}
+                    className="w-full rounded-xl border border-border bg-background py-2.5 pl-9 pr-3 outline-none focus:border-[#F26B4F]"
+                  />
+                </span>
+              </label>
               <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
                 Delivery address
                 <input
                   required
+                  minLength={5}
                   value={deliveryAddress}
                   onChange={(event) => setDeliveryAddress(event.target.value)}
                   placeholder="Street, city, postal code"
@@ -341,16 +394,21 @@ export function ProductDetails({
                 />
               </label>
               <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
-                Phone number
-                <input
-                  required
-                  type="tel"
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  placeholder="Your contact number"
-                  className="rounded-xl border border-border bg-background px-3 py-2.5 outline-none focus:border-[#F26B4F]"
+                Additional message / special instructions
+                <textarea
+                  rows={3}
+                  maxLength={1000}
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="Extra sauce, no onions, delivery notes..."
+                  className="resize-y rounded-xl border border-border bg-background px-3 py-2.5 outline-none focus:border-[#F26B4F]"
                 />
               </label>
+              {orderError && (
+                <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500 sm:col-span-2">
+                  {orderError}
+                </p>
+              )}
               <button
                 type="submit"
                 disabled={savingOrder}
@@ -361,13 +419,24 @@ export function ProductDetails({
             </form>
           )}
 
-          {placedOrderId && (
-            <p className="mt-4 rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-sm">
-              Order #{placedOrderId.slice(-6)} placed.{" "}
-              <Link href="/dashboard/customer" className="font-bold text-[#F26B4F]">
-                Track your order
-              </Link>
-            </p>
+          {placedOrder && (
+            <div className="mt-4 rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-sm">
+              <p className="font-bold text-green-600 dark:text-green-400">
+                Order #{placedOrder._id.slice(-6)} placed successfully.
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                Status: {formatOrderStatus(placedOrder.status)} · Delivery date:{" "}
+                {placedOrder.deliveryDate ?? deliveryDate}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold">
+                <Link href="/dashboard/customer" className="text-[#F26B4F] hover:underline">
+                  Track your order
+                </Link>
+                <Link href={`/payment?orderId=${placedOrder._id}`} className="text-[#F26B4F] hover:underline">
+                  Continue to payment
+                </Link>
+              </div>
+            </div>
           )}
 
           {!isPending && !user && (

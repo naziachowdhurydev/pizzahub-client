@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
 import { notifyCartUpdated } from "@/lib/cart-events";
+import { todayForDateInput, validateDeliveryDate } from "@/lib/delivery-date";
 
 type CartItem = {
   productId: string;
@@ -44,8 +45,10 @@ function CheckoutContent() {
   const [cart, setCart] = useState<CartResponse>({ items: [], subtotal: 0, itemCount: 0 });
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [deliveryDate, setDeliveryDate] = useState(todayForDateInput);
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [phone, setPhone] = useState("");
+  const [notes, setNotes] = useState("");
   const [placedOrder, setPlacedOrder] = useState<PlacedOrder | null>(null);
 
   useEffect(() => {
@@ -98,13 +101,20 @@ function CheckoutContent() {
 
   async function checkout(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const dateError = validateDeliveryDate(deliveryDate);
+    if (dateError) {
+      toast.error(dateError);
+      return;
+    }
     setCheckingOut(true);
     try {
       const order = await apiFetch<PlacedOrder>("/orders/checkout", {
         method: "POST",
         body: JSON.stringify({
+          deliveryDate,
           deliveryAddress: deliveryAddress.trim(),
           phone: phone.trim(),
+          notes: notes.trim(),
         }),
       });
       setPlacedOrder(order);
@@ -190,6 +200,18 @@ function CheckoutContent() {
           <h2 className="text-xl font-black">Delivery Details</h2>
           <form onSubmit={checkout} id="checkout-form" className="mt-5 space-y-4">
             <label className="block text-sm font-semibold">
+              Delivery date
+              <input
+                required
+                type="date"
+                min={todayForDateInput()}
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-border bg-background p-3 text-foreground outline-none transition focus:border-[#F26B4F]"
+              />
+            </label>
+
+            <label className="block text-sm font-semibold">
               Delivery address
               <textarea
                 required
@@ -210,6 +232,18 @@ function CheckoutContent() {
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="01XXXXXXXXX"
                 className="mt-1.5 w-full rounded-xl border border-border bg-background p-3 text-foreground outline-none transition focus:border-[#F26B4F]"
+              />
+            </label>
+
+            <label className="block text-sm font-semibold">
+              Additional message / special instructions
+              <textarea
+                rows={3}
+                maxLength={1000}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Delivery notes or special requests"
+                className="mt-1.5 w-full resize-y rounded-xl border border-border bg-background p-3 text-foreground outline-none transition focus:border-[#F26B4F]"
               />
             </label>
 

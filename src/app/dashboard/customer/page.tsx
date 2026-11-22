@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
+import { formatOrderStatus } from "@/lib/order-status";
 import {
   WISHLIST_UPDATED_EVENT,
   notifyWishlistUpdated,
@@ -20,8 +21,10 @@ type Order = {
   total: number;
   subtotal?: number;
   deliveryFee?: number;
+  deliveryDate?: string;
   deliveryAddress?: string;
   phone?: string;
+  notes?: string;
   createdAt?: string;
   items: Array<{
     itemId: string;
@@ -476,7 +479,7 @@ function CustomerDashboardContent() {
                         </p>
                       </div>
                       <span className="rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold capitalize text-[#F26B4F]">
-                        {order.status.replaceAll("_", " ")}
+                        {formatOrderStatus(order.status)}
                       </span>
                     </div>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -509,8 +512,12 @@ function CustomerDashboardContent() {
                     {expandedOrderId === order._id && (
                       <div className="mt-5 grid gap-4 border-t border-border pt-4">
                         <div className="grid gap-1 text-sm sm:grid-cols-2">
+                          <p><span className="text-muted-foreground">Delivery date: </span>{order.deliveryDate || "Not provided"}</p>
                           <p><span className="text-muted-foreground">Delivery address: </span>{order.deliveryAddress || "Not provided"}</p>
                           <p><span className="text-muted-foreground">Phone: </span>{order.phone || "Not provided"}</p>
+                          {order.notes && (
+                            <p className="sm:col-span-2"><span className="text-muted-foreground">Instructions: </span>{order.notes}</p>
+                          )}
                         </div>
                         <div className="grid gap-3">
                           {groupItemsByVendor(order.items).map((group) => {
@@ -522,7 +529,7 @@ function CustomerDashboardContent() {
                                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                                   <h4 className="font-bold">{group.name}</h4>
                                   <span className="rounded-full bg-orange-500/10 px-2.5 py-1 text-xs font-semibold capitalize text-[#F26B4F]">
-                                    {statuses.length === 1 ? statuses[0].replaceAll("_", " ") : "Multiple statuses"}
+                                    {statuses.length === 1 ? formatOrderStatus(statuses[0]) : "Multiple statuses"}
                                   </span>
                                 </div>
                                 <div className="grid gap-2">
@@ -534,7 +541,7 @@ function CustomerDashboardContent() {
                                       <div>
                                         <p className="font-semibold">{item.name} · {item.size} × {item.quantity}</p>
                                         <p className="mt-1 text-xs capitalize text-muted-foreground">
-                                          Item status: {(item.status ?? order.status).replaceAll("_", " ")}
+                                          Item status: {formatOrderStatus(item.status ?? order.status)}
                                         </p>
                                         {item.status === "rejected" && item.rejectionReason && (
                                           <p className="mt-2 text-sm text-red-600">

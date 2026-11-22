@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { notifyCartUpdated } from "@/lib/cart-events";
-import { dashboardPathForRole } from "@/lib/roles";
+import { todayForDateInput, validateDeliveryDate } from "@/lib/delivery-date";
 
 type CartItem = {
   productId: string;
@@ -51,6 +51,7 @@ export default function CartPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [deliveryDate, setDeliveryDate] = useState(todayForDateInput);
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [placedOrder, setPlacedOrder] = useState<PlacedOrder | null>(null);
@@ -162,11 +163,17 @@ export default function CartPage() {
 
   async function checkout(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const dateError = validateDeliveryDate(deliveryDate);
+    if (dateError) {
+      toast.error(dateError);
+      return;
+    }
     setCheckingOut(true);
     try {
       const order = await apiFetch<PlacedOrder>("/orders/checkout", {
         method: "POST",
         body: JSON.stringify({
+          deliveryDate,
           deliveryAddress: deliveryAddress.trim(),
           phone: phone.trim(),
         }),
@@ -349,6 +356,17 @@ export default function CartPage() {
 
             <form onSubmit={checkout} className="mt-6 grid gap-3">
               <h3 className="font-bold">Delivery information</h3>
+              <label className="grid gap-1.5 text-sm font-medium">
+                Delivery date
+                <input
+                  required
+                  type="date"
+                  min={todayForDateInput()}
+                  value={deliveryDate}
+                  onChange={(event) => setDeliveryDate(event.target.value)}
+                  className="rounded-xl border border-border bg-background px-3 py-2.5 outline-none focus:border-[#F26B4F]"
+                />
+              </label>
               <label className="grid gap-1.5 text-sm font-medium">
                 Address
                 <textarea

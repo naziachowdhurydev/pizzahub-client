@@ -14,6 +14,8 @@ export type Product = {
   ingredients?: string[];
   allergens?: string[];
   preparationTime?: string;
+  vendorName?: string;
+  vendorPlan?: "free" | "premium";
 };
 
 export type UserRole = "customer" | "vendor" | "admin";
@@ -28,6 +30,7 @@ export type CurrentUser = {
   vendorStatus?: "not_applied" | "pending" | "approved" | "rejected";
   vendorAppliedAt?: string;
   vendorApprovedAt?: string;
+  plan?: "free" | "premium";
 };
 
 export type CurrentUserProfile = {

@@ -3,11 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { BarChart3, ClipboardList, Package, RefreshCw, Store } from "lucide-react";
+import { BarChart3, ClipboardList, Package, RefreshCw, Sparkles, Store } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
+import { formatOrderStatus } from "@/lib/order-status";
 import type { Product } from "@/types";
 
 type VendorOrder = {
@@ -15,8 +16,10 @@ type VendorOrder = {
   status: string;
   createdAt?: string;
   customerName: string;
+  deliveryDate?: string;
   deliveryAddress: string;
   phone: string;
+  notes?: string;
   vendorTotal: number;
   items: Array<{
     itemId: string;
@@ -33,6 +36,7 @@ type VendorOrder = {
 };
 
 type VendorOrderStatus =
+  | "accepted"
   | "confirmed"
   | "preparing"
   | "out_for_delivery"
@@ -41,7 +45,8 @@ type VendorOrderStatus =
   | "rejected";
 
 const vendorStatusTransitions: Record<string, VendorOrderStatus[]> = {
-  pending: ["confirmed", "rejected"],
+  pending: ["accepted", "rejected"],
+  accepted: ["preparing", "cancelled"],
   confirmed: ["preparing", "cancelled"],
   preparing: ["out_for_delivery", "cancelled"],
   out_for_delivery: ["delivered"],
@@ -62,6 +67,15 @@ type StoreSettings = {
   description: string;
   phone: string;
   address: string;
+};
+
+type VendorPlan = "free" | "premium";
+
+type Subscription = {
+  plan: VendorPlan;
+  activeItems: number;
+  maxActiveItems: number | null;
+  unlimited: boolean;
 };
 
 type ProductForm = {
@@ -96,6 +110,7 @@ const sections = [
   { id: "orders", label: "Orders", icon: ClipboardList },
   { id: "sales", label: "Sales", icon: BarChart3 },
   { id: "settings", label: "Store Settings", icon: Store },
+  { id: "subscription", label: "Subscription", icon: Sparkles },
 ] as const;
 
 type Section = (typeof sections)[number]["id"];
@@ -112,6 +127,13 @@ function VendorDashboardContent() {
     revenue: 0,
   });
   const [store, setStore] = useState<StoreSettings>(emptyStore);
+  const [subscription, setSubscription] = useState<Subscription>({
+    plan: "free",
+    activeItems: 0,
+    maxActiveItems: 3,
+    unlimited: false,
+  });
+  const [savingPlan, setSavingPlan] = useState("");
   const [form, setForm] = useState<ProductForm>(emptyProduct);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -133,13 +155,15 @@ function VendorDashboardContent() {
       apiFetch<VendorOrder[]>("/vendor/orders"),
       apiFetch<SalesSummary>("/vendor/sales"),
       apiFetch<StoreSettings>("/vendor/store"),
+      apiFetch<Subscription>("/vendor/subscription"),
     ])
-      .then(([vendorProducts, vendorOrders, summary, settings]) => {
+      .then(([vendorProducts, vendorOrders, summary, settings, plan]) => {
         if (!active) return;
         setProducts(vendorProducts);
         setOrders(vendorOrders);
         setSales(summary);
         setStore(settings);
+        setSubscription(plan);
       })
       .catch((cause: unknown) => {
         if (!active) return;
@@ -165,6 +189,35 @@ function VendorDashboardContent() {
       toast.error(cause instanceof Error ? cause.message : "Could not refresh orders.");
     } finally {
       setRefreshingOrders(false);
+    }
+  }
+
+  async function refreshSubscription() {
+    try {
+      setSubscription(await apiFetch<Subscription>("/vendor/subscription"));
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not refresh your plan.");
+    }
+  }
+
+  async function switchPlan(plan: VendorPlan) {
+    if (plan === subscription.plan) return;
+    setSavingPlan(plan);
+    try {
+      const updated = await apiFetch<Subscription>("/vendor/subscription", {
+        method: "POST",
+        body: JSON.stringify({ plan }),
+      });
+      setSubscription(updated);
+      toast.success(
+        plan === "premium"
+          ? "Premium plan activated. Unlimited active items unlocked."
+          : "Free plan activated. The 3 active item limit applies.",
+      );
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not update your plan.");
+    } finally {
+      setSavingPlan("");
     }
   }
 
@@ -196,6 +249,18 @@ function VendorDashboardContent() {
       return;
     }
 
+    const currentlyAvailable = editingId
+      ? products.find((item) => item._id === editingId)?.isAvailable === true
+      : false;
+    const addsActiveItem = !editingId || (form.isAvailable && !currentlyAvailable);
+    const limit = subscription.maxActiveItems ?? Number.POSITIVE_INFINITY;
+    if (addsActiveItem && subscription.activeItems >= limit) {
+      const message = `Your Free plan allows ${limit} active menu items. Upgrade to Premium to add more.`;
+      toast.error(message);
+      setSection("subscription");
+      return;
+    }
+
     setSavingProduct(true);
     try {
       const { isAvailable, ...productFields } = form;
@@ -216,6 +281,7 @@ function VendorDashboardContent() {
           : [saved, ...current],
       );
       resetProductForm();
+      void refreshSubscription();
       toast.success(editingId ? "Product updated." : "Product added.");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not save product.");
@@ -235,6 +301,7 @@ function VendorDashboardContent() {
       setProducts((current) => current.filter((item) => item._id !== product._id));
       if (editingId === product._id) resetProductForm();
       setProductToDelete(null);
+      void refreshSubscription();
       toast.success(`${product.name} was removed from your store.`);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not remove product.");
@@ -334,6 +401,21 @@ function VendorDashboardContent() {
           <section>
             <h2 className="text-2xl font-black">My Products</h2>
             <p className="mt-1 text-muted-foreground">Add, edit and remove pizzas from your store.</p>
+            <p className="mt-2 text-sm font-semibold text-[#F26B4F]">
+              {subscription.unlimited
+                ? "Premium plan: unlimited active items."
+                : `Free plan: ${subscription.activeItems}/${subscription.maxActiveItems ?? 3} active items used.`}
+            </p>
+            {!subscription.unlimited &&
+              subscription.activeItems >= (subscription.maxActiveItems ?? 3) && (
+                <button
+                  type="button"
+                  onClick={() => setSection("subscription")}
+                  className="mt-2 rounded-lg border border-[#F26B4F]/40 px-3 py-1.5 text-xs font-bold text-[#F26B4F]"
+                >
+                  Upgrade to add more items
+                </button>
+              )}
             <form onSubmit={saveProduct} className="mt-6 grid gap-3 rounded-2xl border border-border bg-card p-5 sm:grid-cols-2">
               <h3 className="font-bold sm:col-span-2">{editingId ? "Edit pizza" : "Add a pizza"}</h3>
               <input required placeholder="Pizza name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className="rounded-xl border border-border bg-background px-3 py-2.5 outline-none focus:border-[#F26B4F]" />
@@ -411,6 +493,7 @@ function VendorDashboardContent() {
                     <option value="all">All order history</option>
                     {[
                       "pending",
+                      "accepted",
                       "confirmed",
                       "preparing",
                       "out_for_delivery",
@@ -418,7 +501,7 @@ function VendorDashboardContent() {
                       "rejected",
                       "cancelled",
                     ].map((status) => (
-                      <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                      <option key={status} value={status}>{formatOrderStatus(status)}</option>
                     ))}
                   </select>
                 </label>
@@ -451,13 +534,17 @@ function VendorDashboardContent() {
                         </p>
                       </div>
                       <span className="rounded-full bg-[#F26B4F]/10 px-3 py-1 text-xs font-bold capitalize text-[#F26B4F]">
-                        {order.status.replaceAll("_", " ")}
+                        {formatOrderStatus(order.status)}
                       </span>
                     </div>
                     <div className="mt-4 grid gap-2 rounded-xl bg-muted/50 p-4 text-sm sm:grid-cols-2">
                       <p><span className="text-muted-foreground">Customer: </span>{order.customerName || "Customer"}</p>
+                      <p><span className="text-muted-foreground">Delivery date: </span>{order.deliveryDate || "Not provided"}</p>
                       <p><span className="text-muted-foreground">Phone: </span>{order.phone || "Not provided"}</p>
                       <p className="sm:col-span-2"><span className="text-muted-foreground">Delivery address: </span>{order.deliveryAddress || "Not provided"}</p>
+                      {order.notes && (
+                        <p className="sm:col-span-2"><span className="text-muted-foreground">Instructions: </span>{order.notes}</p>
+                      )}
                     </div>
                     <div className="mt-4 grid gap-3">
                       {order.items.map((item) => {
@@ -485,7 +572,7 @@ function VendorDashboardContent() {
                                 <p className="font-semibold">{item.name} · {item.size} × {item.quantity}</p>
                                 <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                   <span className="rounded-full bg-muted px-2 py-1 font-semibold capitalize text-foreground">
-                                    {currentStatus.replaceAll("_", " ")}
+                                    {formatOrderStatus(currentStatus)}
                                   </span>
                                   <span>৳{item.subtotal}</span>
                                 </p>
@@ -550,7 +637,7 @@ function VendorDashboardContent() {
                                       type="button"
                                       disabled={savingOrderItem === key}
                                       onClick={() =>
-                                        void updateOrderItemStatus(order, item, "confirmed")
+                                        void updateOrderItemStatus(order, item, "accepted")
                                       }
                                       className="rounded-lg bg-green-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
                                     >
@@ -583,14 +670,14 @@ function VendorDashboardContent() {
                                   aria-label={`Status for ${item.name}`}
                                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm capitalize disabled:opacity-60"
                                 >
-                                  <option value={currentStatus}>{currentStatus.replaceAll("_", " ")}</option>
+                                  <option value={currentStatus}>{formatOrderStatus(currentStatus)}</option>
                                   {nextStatuses.map((status) => (
-                                    <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                                    <option key={status} value={status}>{formatOrderStatus(status)}</option>
                                   ))}
                                 </select>
                               ) : (
                                 <span className="rounded-full bg-muted px-3 py-2 text-xs font-semibold capitalize text-muted-foreground">
-                                  {currentStatus.replaceAll("_", " ")}
+                                  {formatOrderStatus(currentStatus)}
                                 </span>
                               )}
                             </div>
@@ -664,6 +751,112 @@ function VendorDashboardContent() {
                 {savingStore ? "Saving..." : "Save store settings"}
               </button>
             </form>
+          </section>
+        )}
+
+        {section === "subscription" && (
+          <section>
+            <h2 className="text-2xl font-black">Subscription Plan</h2>
+            <p className="mt-1 text-muted-foreground">
+              Choose the plan that fits your menu. Changes apply immediately.
+            </p>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <article
+                className={`rounded-2xl border p-5 ${
+                  subscription.plan === "free"
+                    ? "border-[#F26B4F] bg-orange-500/5"
+                    : "border-border bg-card"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xl font-black">Free</h3>
+                  {subscription.plan === "free" && (
+                    <span className="rounded-full bg-[#F26B4F]/10 px-3 py-1 text-xs font-bold text-[#F26B4F]">
+                      Current plan
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 text-2xl font-black">৳0<span className="text-sm font-semibold text-muted-foreground"> / month</span></p>
+                <ul className="mt-4 grid gap-2 text-sm text-muted-foreground">
+                  <li>• Max 3 active menu items</li>
+                  <li>• Basic vendor dashboard</li>
+                  <li>• Order management</li>
+                </ul>
+                <button
+                  type="button"
+                  disabled={subscription.plan === "free" || savingPlan !== ""}
+                  onClick={() => void switchPlan("free")}
+                  className="mt-5 w-full rounded-xl border border-border px-4 py-2.5 text-sm font-bold disabled:opacity-50"
+                >
+                  {savingPlan === "free" ? "Switching..." : subscription.plan === "free" ? "Your current plan" : "Switch to Free"}
+                </button>
+              </article>
+
+              <article
+                className={`rounded-2xl border p-5 ${
+                  subscription.plan === "premium"
+                    ? "border-[#F26B4F] bg-orange-500/5"
+                    : "border-border bg-card"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xl font-black">Premium</h3>
+                  {subscription.plan === "premium" && (
+                    <span className="rounded-full bg-[#F26B4F]/10 px-3 py-1 text-xs font-bold text-[#F26B4F]">
+                      Current plan
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 text-2xl font-black">Coming soon<span className="text-sm font-semibold text-muted-foreground"> / billing</span></p>
+                <ul className="mt-4 grid gap-2 text-sm text-muted-foreground">
+                  <li>• Unlimited active items</li>
+                  <li>• Premium vendor badge</li>
+                  <li>• Featured menu placement</li>
+                  <li>• All Free features</li>
+                </ul>
+                <button
+                  type="button"
+                  disabled={subscription.plan === "premium" || savingPlan !== ""}
+                  onClick={() => void switchPlan("premium")}
+                  className="mt-5 w-full rounded-xl bg-[#F26B4F] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {savingPlan === "premium" ? "Activating..." : subscription.plan === "premium" ? "Your current plan" : "Activate Premium demo"}
+                </button>
+              </article>
+            </div>
+
+            <div className="mt-6 overflow-hidden rounded-2xl border border-border">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3">Subscription Plan</th>
+                    <th className="px-4 py-3">What you get</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  <tr>
+                    <td className="px-4 py-3 font-bold">Free</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      Max 3 active menu items, basic vendor dashboard, order management
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-bold">Premium</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      Unlimited active items, Premium vendor badge, featured menu placement, all Free features
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p className="mt-4 rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              Current usage: {subscription.activeItems} active item
+              {subscription.activeItems === 1 ? "" : "s"}
+              {subscription.unlimited ? " (unlimited allowed)." : ` of ${subscription.maxActiveItems ?? 3} allowed.`}
+              {" "}Premium activation is a demo switch; connect billing before charging vendors.
+            </p>
           </section>
         )}
       </div>

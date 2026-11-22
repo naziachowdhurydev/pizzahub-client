@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Pizza,
@@ -37,6 +38,7 @@ type CartSummary = {
 export function SiteHeader() {
   const { data: session, isPending } = authClient.useSession();
   const { user: currentUser, loading: currentUserLoading } = useCurrentUser();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
 
@@ -83,6 +85,27 @@ export function SiteHeader() {
     { href: "/menu", label: "Menu" },
   ];
 
+  function isLinkActive(href: string): boolean {
+    if (href === "/") return pathname === "/";
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
+  function desktopLinkClass(href: string): string {
+    return `rounded-lg px-3 py-2 text-sm font-semibold transition ${
+      isLinkActive(href)
+        ? "bg-orange-500/10 text-[#F26B4F]"
+        : "text-muted-foreground hover:bg-accent hover:text-[#F26B4F]"
+    }`;
+  }
+
+  function mobileLinkClass(href: string): string {
+    return `rounded-xl px-3 py-2 font-semibold transition ${
+      isLinkActive(href)
+        ? "border border-[#F26B4F]/30 bg-orange-500/10 text-[#F26B4F]"
+        : "text-foreground hover:bg-accent hover:text-[#F26B4F]"
+    }`;
+  }
+
   const handleLogout = async () => {
     await authClient.signOut();
     setOpen(false);
@@ -105,12 +128,13 @@ export function SiteHeader() {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav className="hidden items-center gap-1 md:flex">
           {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
+              aria-current={isLinkActive(link.href) ? "page" : undefined}
+              className={desktopLinkClass(link.href)}
             >
               {link.label}
             </Link>
@@ -119,7 +143,8 @@ export function SiteHeader() {
           {user && dashboardHref && !isAdmin && (
             <Link
               href={dashboardHref}
-              className="text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
+              aria-current={isLinkActive(dashboardHref) ? "page" : undefined}
+              className={desktopLinkClass(dashboardHref)}
             >
               {dashboardLabel}
             </Link>
@@ -129,14 +154,16 @@ export function SiteHeader() {
             <>
               <Link
                 href="/dashboard/admin"
-                className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
+                aria-current={isLinkActive("/dashboard/admin") ? "page" : undefined}
+                className={`flex items-center gap-2 ${desktopLinkClass("/dashboard/admin")}`}
               >
                 <LayoutDashboard size={17} />
                 Admin Dashboard
               </Link>
               <Link
                 href="/dashboard/vendor"
-                className="text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
+                aria-current={isLinkActive("/dashboard/vendor") ? "page" : undefined}
+                className={desktopLinkClass("/dashboard/vendor")}
               >
                 Vendor View
               </Link>
@@ -153,7 +180,12 @@ export function SiteHeader() {
           <Link
             href="/cart"
             aria-label="Shopping cart"
-            className="relative rounded-xl p-2.5 text-foreground transition hover:bg-accent hover:text-accent-foreground"
+            aria-current={isLinkActive("/cart") ? "page" : undefined}
+            className={`relative rounded-xl p-2.5 transition ${
+              isLinkActive("/cart")
+                ? "bg-orange-500/10 text-[#F26B4F]"
+                : "text-foreground hover:bg-accent hover:text-accent-foreground"
+            }`}
           >
             <ShoppingBag size={21} />
             {user && userRole === "customer" && cartCount > 0 && (
@@ -320,7 +352,8 @@ export function SiteHeader() {
                 onClick={() => setOpen(false)}
                 key={link.href}
                 href={link.href}
-                className="font-semibold text-foreground transition hover:text-[#F26B4F]"
+                aria-current={isLinkActive(link.href) ? "page" : undefined}
+                className={mobileLinkClass(link.href)}
               >
                 {link.label}
               </Link>
@@ -330,7 +363,8 @@ export function SiteHeader() {
               <Link
                 href={dashboardHref}
                 onClick={() => setOpen(false)}
-                className="font-semibold text-foreground hover:text-[#F26B4F]"
+                aria-current={isLinkActive(dashboardHref) ? "page" : undefined}
+                className={mobileLinkClass(dashboardHref)}
               >
                 {dashboardLabel}
               </Link>
@@ -341,14 +375,16 @@ export function SiteHeader() {
                 <Link
                   href="/dashboard/admin"
                   onClick={() => setOpen(false)}
-                  className="font-semibold text-foreground hover:text-[#F26B4F]"
+                  aria-current={isLinkActive("/dashboard/admin") ? "page" : undefined}
+                  className={mobileLinkClass("/dashboard/admin")}
                 >
                   Admin Dashboard
                 </Link>
                 <Link
                   href="/dashboard/vendor"
                   onClick={() => setOpen(false)}
-                  className="font-semibold text-foreground hover:text-[#F26B4F]"
+                  aria-current={isLinkActive("/dashboard/vendor") ? "page" : undefined}
+                  className={mobileLinkClass("/dashboard/vendor")}
                 >
                   Vendor View
                 </Link>
@@ -358,18 +394,20 @@ export function SiteHeader() {
             <Link
               href="/cart"
               onClick={() => setOpen(false)}
-              className="flex items-center gap-2 font-semibold text-foreground"
+              aria-current={isLinkActive("/cart") ? "page" : undefined}
+              className={`flex items-center gap-2 ${mobileLinkClass("/cart")}`}
             >
               <ShoppingBag size={18} />
               Shopping Cart{user && userRole === "customer" && cartCount > 0 ? ` (${cartCount})` : ""}
             </Link>
 
             {!isPending && !user ? (
-              <div className="flex flex-col gap-3 border-t border-border pt-4">
+              <div className="flex flex-col gap-2 border-t border-border pt-4">
                 <Link
                   href="/login"
                   onClick={() => setOpen(false)}
-                  className="font-semibold text-foreground"
+                  aria-current={isLinkActive("/login") ? "page" : undefined}
+                  className={mobileLinkClass("/login")}
                 >
                   Log in
                 </Link>
@@ -377,7 +415,12 @@ export function SiteHeader() {
                 <Link
                   href="/register"
                   onClick={() => setOpen(false)}
-                  className="w-fit rounded-xl bg-[#F26B4F] px-5 py-2.5 font-bold text-white"
+                  aria-current={isLinkActive("/register") ? "page" : undefined}
+                  className={`w-fit rounded-xl px-5 py-2.5 font-bold text-white ${
+                    isLinkActive("/register")
+                      ? "bg-[#D95338] ring-2 ring-[#F26B4F]/40"
+                      : "bg-[#F26B4F]"
+                  }`}
                 >
                   Create account
                 </Link>

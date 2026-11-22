@@ -6,6 +6,7 @@ import { BarChart3, Bell, ClipboardList, LifeBuoy, Package, RefreshCw, Store, Us
 import { toast } from "sonner";
 import { DashboardAccess } from "@/components/dashboard-access";
 import { apiFetch } from "@/lib/api";
+import { formatOrderStatus } from "@/lib/order-status";
 import { useCurrentUser } from "@/lib/use-current-user";
 
 type UserAccount = {
@@ -61,6 +62,7 @@ type AdminOrder = {
   customerName: string;
   customerEmail?: string;
   phone: string;
+  deliveryDate?: string;
   deliveryAddress: string;
   notes?: string;
   status: string;
@@ -112,6 +114,7 @@ type OrderIssueStatus = AdminOrderIssue["status"];
 
 const orderStatuses = [
   "pending",
+  "accepted",
   "confirmed",
   "preparing",
   "out_for_delivery",
@@ -730,7 +733,7 @@ function AdminDashboardContent() {
                     >
                       <option value="all">All statuses</option>
                       {orderStatuses.map((status) => (
-                        <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                        <option key={status} value={status}>{formatOrderStatus(status)}</option>
                       ))}
                     </select>
                   </label>
@@ -807,7 +810,7 @@ function AdminDashboardContent() {
                           <p className="mt-1 text-xs text-muted-foreground">
                             {order.items.length} item{order.items.length === 1 ? "" : "s"} · Order status:
                             <span className="ml-1 font-semibold capitalize text-foreground">
-                              {order.status.replaceAll("_", " ")}
+                              {formatOrderStatus(order.status)}
                             </span>
                           </p>
                         </div>
@@ -820,7 +823,7 @@ function AdminDashboardContent() {
                             className="rounded-lg border border-border bg-background px-3 py-2 text-sm capitalize text-foreground"
                           >
                             {orderStatuses.map((status) => (
-                              <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                              <option key={status} value={status}>{formatOrderStatus(status)}</option>
                             ))}
                           </select>
                         </label>
@@ -832,6 +835,7 @@ function AdminDashboardContent() {
                         <div className="grid gap-4 border-t border-border p-4">
                           <div className="grid gap-2 text-sm sm:grid-cols-2">
                             <p><span className="text-muted-foreground">Customer: </span>{order.customerName}</p>
+                            <p><span className="text-muted-foreground">Delivery date: </span>{order.deliveryDate || "Not provided"}</p>
                             <p><span className="text-muted-foreground">Phone: </span>{order.phone || "Not provided"}</p>
                             <p className="sm:col-span-2"><span className="text-muted-foreground">Delivery address: </span>{order.deliveryAddress || "Not provided"}</p>
                             {order.notes && <p className="sm:col-span-2"><span className="text-muted-foreground">Notes: </span>{order.notes}</p>}
@@ -842,7 +846,7 @@ function AdminDashboardContent() {
                                 <div>
                                   <p className="font-semibold">{item.name} · {item.size} × {item.quantity}</p>
                                   <p className="mt-1 text-xs text-muted-foreground">
-                                    Vendor: {item.vendorName ?? (item.vendorId ? item.vendorId : "PizzaHub platform")} · Item status: {item.status.replaceAll("_", " ")}
+                                    Vendor: {item.vendorName ?? (item.vendorId ? item.vendorId : "PizzaHub platform")} · Item status: {formatOrderStatus(item.status)}
                                   </p>
                                   {item.rejectionReason && (
                                     <p className="mt-2 text-xs text-red-600">
@@ -887,7 +891,7 @@ function AdminDashboardContent() {
                 >
                   <option value="all">All requests</option>
                   {(["open", "in_review", "resolved", "rejected"] as const).map((status) => (
-                    <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                    <option key={status} value={status}>{formatOrderStatus(status)}</option>
                   ))}
                 </select>
               </label>
@@ -912,7 +916,7 @@ function AdminDashboardContent() {
                         </p>
                       </div>
                       <span className="rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold capitalize text-[#F26B4F]">
-                        {issue.status.replaceAll("_", " ")}
+                        {formatOrderStatus(issue.status)}
                       </span>
                     </div>
                     <p className="mt-4 whitespace-pre-wrap text-sm">{issue.message}</p>
@@ -951,7 +955,7 @@ function AdminDashboardContent() {
                           className="rounded-lg border border-border bg-background px-3 py-2 font-normal capitalize"
                         >
                           {(["open", "in_review", "resolved", "rejected"] as const).map((status) => (
-                            <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                            <option key={status} value={status}>{formatOrderStatus(status)}</option>
                           ))}
                         </select>
                       </label>
@@ -1079,7 +1083,7 @@ function AdminDashboardContent() {
                 <div className="mt-4 flex flex-wrap gap-3">
                   {Object.entries(analytics.ordersByStatus).map(([status, count]) => (
                     <span key={status} className="rounded-full bg-muted px-3 py-1.5 text-sm capitalize">
-                      {status.replaceAll("_", " ")}: {count}
+                      {formatOrderStatus(status)}: {count}
                     </span>
                   ))}
                 </div>
