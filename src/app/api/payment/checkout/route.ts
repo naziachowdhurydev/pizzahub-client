@@ -1,84 +1,97 @@
+// Updated checkout endpoint – supports single order or combined payment
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripeSecretKey =
-  process.env.STRIPE_SECRET_KEY ||
-  "sk_test_51UeTsc7xywTho9ZNB84PVm8qcXMGAB7hW6gilUztxvq67I8DouBYZpdQzw1kiNLmzpAO2kV165tJ5SgltD5Ccee700naNnNf4y";
+// Stripe secret – should be set in .env (no placeholder here)
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
+/**
+ * POST body shape:
+ *   - orderId?: string               // single order identifier
+ *   - total?: number                 // total amount for single order (fallback)
+ *   - items?: Array<{ name, price, quantity, size? }>
+ *   - orderIds?: string[]            // optional array of order IDs for combined payment
+ *   - combinedTotal?: number         // optional total for combined payment (client supplied)
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { orderId, total, items } = body as {
+    const {
+      orderId,
+      total,
+      items,
+      orderIds,
+      combinedTotal,
+    } = body as {
       orderId?: string;
       total?: number;
       items?: Array<{ name: string; price: number; quantity: number; size?: string }>;
+      orderIds?: string[];
+      combinedTotal?: number;
     };
 
-    if (!stripeSecretKey || stripeSecretKey.includes("placeholder")) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Stripe secret key is not configured.",
-        },
-        { status: 400 }
-      );
+    if (!stripeSecretKey) {
+      return NextResponse.json({ success: false, message: "Stripe secret key missing" }, { status: 400 });
     }
 
     const stripe = new Stripe(stripeSecretKey);
+    const origin = request.headers.get("origin") || request.headers.get("referer") || "http://localhost:3000";
 
-    // Calculate line items for Stripe Checkout
-    const origin =
-      request.headers.get("origin") ||
-      request.headers.get("referer") ||
-      "http://localhost:3000";
+    // Determine line items and metadata
+    let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+    const metadata: Record<string, string> = {};
 
-    const formattedLineItems =
-      Array.isArray(items) && items.length > 0
-        ? items.map((item) => ({
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: `${item.name}${item.size ? ` (${item.size})` : ""}`,
-              },
-              // In Stripe, unit_amount is in cents (multiply ৳ or $ by 100)
-              unit_amount: Math.round(Number(item.price || 1) * 100),
-            },
-            quantity: Math.max(1, Number(item.quantity || 1)),
-          }))
-        : [
-            {
-              price_data: {
-                currency: "usd",
-                product_data: {
-                  name: `PizzaHub Order #${orderId ? orderId.slice(-6).toUpperCase() : "FOOD"}`,
-                },
-                unit_amount: Math.round(Number(total || 10) * 100),
-              },
-              quantity: 1,
-            },
-          ];
+    if (Array.isArray(orderIds) && orderIds.length > 0) {
+      // Combined payment – create a single line item representing the aggregate amount.
+      const amount = combinedTotal ?? (total ?? 0) * orderIds.length;
+      lineItems = [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: { name: `PizzaHub Combined Payment (${orderIds.length} orders)` },
+            unit_amount: Math.round(amount * 100),
+          },
+          quantity: 1,
+        },
+      ];
+      metadata.orderIds = orderIds.join(",");
+    } else if (Array.isArray(items) && items.length > 0) {
+      lineItems = items.map((it) => ({
+        price_data: {
+          currency: "usd",
+          product_data: { name: `${it.name}${it.size ? ` (${it.size})` : ""}` },
+          unit_amount: Math.round(Number(it.price) * 100),
+        },
+        quantity: Math.max(1, Number(it.quantity)),
+      }));
+      if (orderId) metadata.orderId = orderId;
+    } else {
+      // Fallback generic line item
+      lineItems = [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: { name: `PizzaHub Order #${orderId?.slice(-6).toUpperCase() || "FOOD"}` },
+            unit_amount: Math.round(Number(total ?? 10) * 100),
+          },
+          quantity: 1,
+        },
+      ];
+      if (orderId) metadata.orderId = orderId;
+    }
 
     const session = await stripe.checkout.sessions.create({
-      line_items: formattedLineItems,
+      line_items: lineItems,
       mode: "payment",
-      success_url: `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}&orderId=${encodeURIComponent(orderId || "")}`,
-      cancel_url: `${origin}/payment?orderId=${encodeURIComponent(orderId || "")}&cancelled=true`,
-      metadata: {
-        orderId: orderId || "unknown",
-      },
+      success_url: `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/payment?orderId=${encodeURIComponent(orderId || "")}\u0026cancelled=true`,
+      metadata,
     });
 
-    return NextResponse.json({
-      success: true,
-      url: session.url,
-      sessionId: session.id,
-    });
-  } catch (error) {
-    console.error("Stripe Checkout Session creation failed:", error);
-    const message = error instanceof Error ? error.message : "Payment session creation failed.";
-    return NextResponse.json(
-      { success: false, message },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, url: session.url, sessionId: session.id });
+  } catch (e) {
+    console.error("Stripe checkout error:", e);
+    const msg = e instanceof Error ? e.message : "Unexpected error";
+    return NextResponse.json({ success: false, message: msg }, { status: 500 });
   }
 }

@@ -21,6 +21,7 @@ import { OrderSummaryCard } from "./order-summary-card";
 import { StripeCheckoutModal } from "./stripe-checkout-modal";
 import type { PaymentMethod, PaymentOrderDetails } from "./types";
 
+// Demo fallback – shown when no real order data is available.
 const fallbackDemoOrder: PaymentOrderDetails = {
   orderId: "67890abcdef1234567890abc",
   customerName: "Pizza Lover",
@@ -35,7 +36,8 @@ const fallbackDemoOrder: PaymentOrderDetails = {
       itemId: "item_1",
       name: "Classic Pepperoni Feast",
       size: "Regular",
-      image: "https://images.unsplash.com/photo-1579751626657-72bc17010498?auto=format&fit=crop&w=300&q=80",
+      image:
+        "https://images.unsplash.com/photo-1579751626657-72bc17010498?auto=format&fit=crop&w=300&q=80",
       price: 450,
       quantity: 1,
       subtotal: 450,
@@ -44,7 +46,8 @@ const fallbackDemoOrder: PaymentOrderDetails = {
       itemId: "item_2",
       name: "Four Cheese Margherita",
       size: "Regular",
-      image: "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?auto=format&fit=crop&w=300&q=80",
+      image:
+        "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?auto=format&fit=crop&w=300&q=80",
       price: 300,
       quantity: 1,
       subtotal: 300,
@@ -52,106 +55,85 @@ const fallbackDemoOrder: PaymentOrderDetails = {
   ],
 };
 
-export function PaymentView({ orderId }: { orderId?: string }) {
+/**
+ * PaymentView supports:
+ *   - a single order (orderIds omitted or length===1)
+ *   - multiple orders for combined payment (orderIds array > 1)
+ */
+export function PaymentView({ orderIds }: { orderIds?: string[] }) {
   const router = useRouter();
-  const [order, setOrder] = useState<PaymentOrderDetails | null>(null);
+  const [orders, setOrders] = useState<PaymentOrderDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>("stripe");
   const [stripeModalOpen, setStripeModalOpen] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
 
+  // Load orders – if orderIds provided, fetch each; otherwise fallback to the latest pending order.
   useEffect(() => {
     let active = true;
-
-    async function loadOrder() {
-      if (orderId) {
-        try {
-          const data = await apiFetch<PaymentOrderDetails>(`/orders/${orderId}`);
-          if (active && data) {
-            setOrder(data);
-            return;
-          }
-        } catch {
-          // If the specific order ID wasn't found in current user's session, fallback
-        }
-      }
-
-      // If no orderId was passed or fetch failed, check recent customer orders
+    async function load() {
       try {
-        const myOrders = await apiFetch<PaymentOrderDetails[]>("/orders/my");
-        if (active && Array.isArray(myOrders) && myOrders.length > 0) {
-          const pending = myOrders.find((o) => o.status === "pending") ?? myOrders[0];
-          setOrder(pending);
-          return;
+        if (orderIds && orderIds.length > 0) {
+          const fetched = await Promise.all(
+            orderIds.map((id) => apiFetch<PaymentOrderDetails>(`/orders/${id}`).catch(() => null)),
+          );
+          const valid = fetched.filter(Boolean) as PaymentOrderDetails[];
+          if (active) setOrders(valid);
+        } else {
+          const myOrders = await apiFetch<PaymentOrderDetails[]>("/orders/my");
+          const pending = myOrders.find((o) => o.status === "pending") ?? myOrders[0] ?? fallbackDemoOrder;
+          if (active) setOrders([pending]);
         }
       } catch {
-        // Fallback to sample demo order for design preview
-      }
-
-      if (active) {
-        setOrder(fallbackDemoOrder);
+        if (active) setOrders([fallbackDemoOrder]);
+      } finally {
+        if (active) setLoading(false);
       }
     }
-
-    loadOrder().finally(() => {
-      if (active) setLoading(false);
-    });
-
+    load();
     return () => {
       active = false;
     };
-  }, [orderId]);
+  }, [orderIds]);
 
-  async function handlePay() {
-    if (!order) return;
+  const aggregateTotal = orders.reduce((sum, o) => sum + (o.total ?? o.subtotal), 0);
 
-    if (selectedMethod === "stripe") {
-      setProcessingPayment(true);
-      toast.info("Connecting to Stripe Checkout...");
-      try {
-        const response = await fetch("/api/payment/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            orderId: currentOrder.orderId,
-            total: currentOrder.total,
-            items: currentOrder.items,
-          }),
-        });
-        const result = await response.json();
-        if (result.success && result.url) {
-          window.location.href = result.url;
-          return;
-        }
-        // If Stripe returns an error or preview mode is requested, open test modal
-        if (result.message) {
-          toast.info(result.message);
-        }
-        setStripeModalOpen(true);
-      } catch {
-        setStripeModalOpen(true);
-      } finally {
-        setProcessingPayment(false);
+  async function handlePayAll() {
+    if (!orders.length) return;
+    setProcessingPayment(true);
+    try {
+      const response = await fetch("/api/payment/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderIds: orders.map((o) => o.orderId), combinedTotal: aggregateTotal }),
+      });
+      const result = await response.json();
+      if (result.success && result.url) {
+        window.location.href = result.url;
+        return;
       }
-      return;
-    }
-
-    if (selectedMethod === "cod") {
-      setProcessingPayment(true);
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      toast.error(result.message ?? "Unable to start Stripe checkout");
+    } finally {
       setProcessingPayment(false);
-      toast.success("Order confirmed with Cash on Delivery! Pay upon arrival.");
-      router.push("/dashboard/customer");
-      return;
     }
+  }
 
-    if (selectedMethod === "wallet") {
-      setProcessingPayment(true);
-      await new Promise((resolve) => setTimeout(resolve, 800));
+  async function handlePaySingle(order: PaymentOrderDetails) {
+    setProcessingPayment(true);
+    try {
+      const response = await fetch("/api/payment/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: order.orderId, total: order.total, items: order.items }),
+      });
+      const result = await response.json();
+      if (result.success && result.url) {
+        window.location.href = result.url;
+        return;
+      }
+      toast.error(result.message ?? "Unable to start Stripe checkout");
+    } finally {
       setProcessingPayment(false);
-      toast.success("Mobile wallet request initiated! Please confirm on your mobile app.");
-      router.push("/dashboard/customer");
-      return;
     }
   }
 
@@ -163,113 +145,49 @@ export function PaymentView({ orderId }: { orderId?: string }) {
     );
   }
 
-  const currentOrder = order || fallbackDemoOrder;
-
   return (
     <main className="mx-auto min-h-[75vh] max-w-6xl px-5 py-10 md:px-8">
-      {/* Navigation Breadcrumb */}
-      <nav className="mb-6 flex items-center justify-between">
-        <Link
-          href="/cart"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-[#F26B4F]"
-        >
-          <ArrowLeft size={16} /> Back to Cart
-        </Link>
-        <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-green-600 dark:text-green-400">
-          <Lock size={14} /> Secure Payment Gateway
-        </span>
-      </nav>
-
+      {/* Header */}
       <header className="mb-8">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#F26B4F]">
-          Final Step
-        </p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-          Complete Your Payment
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Choose your preferred payment method below to finalize your order.
-        </p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#F26B4F]">Final Step</p>
+        <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Complete Your Payment</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Choose a payment method and confirm your order(s).</p>
       </header>
 
-      <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] items-start">
-        {/* Left Column: Payment Methods and Pay Action */}
-        <div className="space-y-6">
-          <PaymentMethods
-            selectedMethod={selectedMethod}
-            onSelectMethod={setSelectedMethod}
-          />
-
-          {/* Security & Guarantees */}
-          <div className="grid grid-cols-2 gap-3 pt-2 text-xs text-muted-foreground sm:grid-cols-3">
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
-              <ShieldCheck size={18} className="text-[#F26B4F] shrink-0" />
-              <span>PCI-DSS Compliant</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
-              <Truck size={18} className="text-[#F26B4F] shrink-0" />
-              <span>Fast Hot Delivery</span>
-            </div>
-            <div className="col-span-2 sm:col-span-1 flex items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
-              <Pizza size={18} className="text-[#F26B4F] shrink-0" />
-              <span>100% Quality Slice</span>
-            </div>
-          </div>
-
-          {/* Pay Button Action */}
-          <div className="rounded-3xl border border-border bg-card p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-semibold text-muted-foreground">Total Payable:</span>
-              <span className="text-2xl font-black text-[#F26B4F]">
-                ৳{currentOrder.total}
-              </span>
-            </div>
-
+      {/* Order summary list */}
+      <section className="mb-6 space-y-4">
+        {orders.map((order) => (
+          <OrderSummaryCard key={order.orderId} order={order} />
+        ))}
+        {orders.length > 1 && (
+          <div className="mt-4 text-right">
+            <p className="font-medium">
+              Combined total: <span className="text-lg">${aggregateTotal.toFixed(2)}</span>
+            </p>
             <button
-              type="button"
               disabled={processingPayment}
-              onClick={() => void handlePay()}
-              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#F26B4F] py-4 px-6 text-base font-bold text-white shadow-xl shadow-[#F26B4F]/20 transition hover:bg-[#E85C40] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 rounded bg-[#F26B4F] px-4 py-2 font-semibold text-white hover:bg-[#d15c3e]"
+              onClick={handlePayAll}
             >
-              {processingPayment ? (
-                "Connecting to Payment..."
-              ) : selectedMethod === "stripe" ? (
-                <>
-                  <CreditCard size={20} />
-                  Pay ৳{currentOrder.total} with Stripe
-                  <ArrowRight size={18} />
-                </>
-              ) : selectedMethod === "cod" ? (
-                <>
-                  <CheckCircle2 size={20} />
-                  Confirm Cash on Delivery (৳{currentOrder.total})
-                </>
-              ) : (
-                <>
-                  <Sparkles size={20} />
-                  Pay with Digital Wallet (৳{currentOrder.total})
-                </>
-              )}
+              Pay All (${aggregateTotal.toFixed(2)})
             </button>
-
-            {selectedMethod === "stripe" && (
-              <p className="text-center text-xs text-muted-foreground">
-                You will be redirected to the secure Stripe Checkout gateway.
-              </p>
-            )}
           </div>
-        </div>
+        )}
+      </section>
 
-        {/* Right Column: Order Summary & Item Review */}
-        <OrderSummaryCard order={currentOrder} />
-      </div>
+      {/* Payment method selector */}
+      <PaymentMethods selectedMethod={selectedMethod} onSelectMethod={setSelectedMethod} />
 
-      {/* Stripe Modal Simulation */}
-      <StripeCheckoutModal
-        isOpen={stripeModalOpen}
-        onClose={() => setStripeModalOpen(false)}
-        order={currentOrder}
-      />
+      {/* Single-order pay button – shown when only one order */}
+      {orders.length === 1 && (
+        <button
+          disabled={processingPayment}
+          className="mt-4 w-full rounded bg-[#F26B4F] px-4 py-3 font-semibold text-white hover:bg-[#d15c3e]"
+          onClick={() => handlePaySingle(orders[0])}
+        >
+          Pay ${orders[0].total?.toFixed(2) ?? orders[0].subtotal?.toFixed(2)}
+        </button>
+      )}
     </main>
   );
 }
