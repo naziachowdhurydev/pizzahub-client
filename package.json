@@ -17,6 +17,7 @@
     "cn": "^0.5.2",
     "lucide-react": "latest",
     "mongodb": "^7.9.1",
+    "motion": "^14.14.0",
     "next": "^16.4.6",
     "react": "latest",
     "react-dom": "latest",
