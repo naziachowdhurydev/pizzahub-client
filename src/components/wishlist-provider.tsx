@@ -78,27 +78,16 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
       setPendingId(productId);
 
       try {
-        if (wasSaved) {
-          await apiFetch<void>(
-            `/customer/wishlist/${encodeURIComponent(productId)}`,
-            { method: "DELETE" },
-          );
-        } else {
-          await apiFetch<void>(
-            `/customer/wishlist/${encodeURIComponent(productId)}`,
-            { method: "POST" },
-          );
-        }
+        const path = `/customer/wishlist/${encodeURIComponent(productId)}`;
+        const updated = wasSaved
+          ? await apiFetch<WishlistProduct[]>(path, { method: "DELETE" })
+          : await apiFetch<WishlistProduct[]>(path, { method: "POST" });
 
-        const nextSaved = !wasSaved;
-        setProductIds((current) => {
-          const next = new Set(current);
-          if (nextSaved) next.add(productId);
-          else next.delete(productId);
-          return next;
-        });
+        // The backend returns the persisted wishlist, so the UI always
+        // reflects the database after save/remove.
+        setProductIds(new Set(updated.map((item) => item._id)));
         notifyWishlistUpdated();
-        return nextSaved;
+        return !wasSaved;
       } finally {
         pendingRef.current.delete(productId);
         setPendingId((current) => (current === productId ? null : current));

@@ -34,14 +34,18 @@ export function SaveToWishlistButton({ productId }: { productId: string }) {
       disabled={busy || loading}
       aria-label={saved ? "Remove pizza from wishlist" : "Save pizza to wishlist"}
       aria-pressed={saved}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:border-[#F26B4F] hover:text-[#F26B4F] disabled:opacity-60"
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:opacity-60 ${
+        saved
+          ? "border-green-500 bg-green-500/10 text-green-600 hover:border-green-500 hover:bg-green-500/20 dark:text-green-400"
+          : "border-border hover:border-[#F26B4F] hover:text-[#F26B4F]"
+      }`}
     >
       <Heart
         size={14}
         fill={saved ? "currentColor" : "none"}
-        className={saved ? "text-[#F26B4F]" : undefined}
+        className={saved ? "text-green-600 dark:text-green-400" : undefined}
       />
-      {busy ? "Saving..." : saved ? "Saved" : "Save"}
+      {busy ? (saved ? "Removing..." : "Saving...") : saved ? "Saved" : "Save"}
     </button>
   );
 }

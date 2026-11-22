@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Clock3, ShoppingBag, Star } from "lucide-react";
 import { toast } from "sonner";
 import { ProductGrid } from "@/components/product-grid";
@@ -40,6 +40,7 @@ export function ProductDetails({
   const [size, setSize] = useState(initialProduct.sizes[0] ?? "Regular");
   const [quantity, setQuantity] = useState(1);
   const [savingCart, setSavingCart] = useState(false);
+  const savingCartRef = useRef(false);
   const [cartItems, setCartItems] = useState<CartItemRef[]>([]);
   const [addedToCart, setAddedToCart] = useState(false);
   const [showOrderForm, setShowOrderForm] = useState(false);
@@ -91,6 +92,8 @@ export function ProductDetails({
     product.vendorId === user?.id;
 
   async function addToCart() {
+    if (savingCartRef.current) return;
+    savingCartRef.current = true;
     setSavingCart(true);
     try {
       await apiFetch<{ itemCount: number }>("/cart/items", {
@@ -117,6 +120,7 @@ export function ProductDetails({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not add this pizza to your cart.");
     } finally {
+      savingCartRef.current = false;
       setSavingCart(false);
     }
   }
@@ -294,7 +298,11 @@ export function ProductDetails({
                 type="button"
                 disabled={savingCart}
                 onClick={() => void addToCart()}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#F26B4F] px-5 py-3 font-bold text-white transition hover:bg-[#D95338] disabled:opacity-60"
+                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 font-bold text-white transition disabled:opacity-60 ${
+                  addedToCart
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-[#F26B4F] hover:bg-[#D95338]"
+                }`}
               >
                 <ShoppingBag size={18} />
                 {savingCart
