@@ -12,6 +12,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { ProductGrid } from "@/components/product-grid";
+import { HeroCopy } from "@/components/home/hero-copy";
+import { HeroVisual } from "@/components/home/hero-visual";
 import { Reveal } from "@/components/home/reveal";
 import { getProducts } from "@/lib/api";
 import type { Product } from "@/types";
@@ -69,76 +71,39 @@ export default async function HomePage() {
     <main>
       <section className="relative overflow-hidden border-b border-border">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_75%_35%,rgba(249,115,22,0.18),transparent_45%)]" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-5 py-20 md:grid-cols-2 md:px-8 md:py-28">
-          <Reveal y={18}>
-            <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-400">
-              <Flame size={16} /> HOT, FRESH & MADE WITH LOVE
-            </p>
-            <h1 className="max-w-xl text-5xl font-black leading-[1.05] tracking-tight sm:text-6xl">
-              GOOD TIMES
-              <br />
-              <span className="text-orange-500">ARE PIZZA</span>
-              <br />
-              TIMES.
-            </h1>
-            <p className="mt-6 max-w-lg text-lg leading-8 text-muted-foreground">
-              Hand-stretched dough, rich sauces and generous toppings. Your next favourite
-              slice is just a few clicks away.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/menu"
-                className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-6 py-3.5 font-bold text-black transition hover:-translate-y-0.5 hover:bg-orange-400"
-              >
-                Explore menu <ArrowRight size={18} />
-              </Link>
-              <Link
-                href="/register"
-                className="rounded-xl border border-border px-6 py-3.5 font-semibold transition hover:border-orange-500 hover:text-orange-400"
-              >
-                Join PizzaHub
-              </Link>
-            </div>
-            <div className="mt-12 flex flex-wrap gap-7 text-sm text-muted-foreground">
-              <span className="flex items-center gap-2">
-                <Clock3 size={17} className="text-orange-500" /> 30 min delivery
-              </span>
-              <span className="flex items-center gap-2">
-                <Truck size={17} className="text-orange-500" /> Fresh to your door
-              </span>
-            </div>
-          </Reveal>
-
-          <Reveal delay={0.12} y={24} className="relative mx-auto w-full max-w-xl">
-            <div className="absolute inset-8 rounded-full bg-orange-500/20 blur-3xl" />
-            <img
-              className="relative aspect-square w-full rounded-full border border-orange-500/20 object-cover shadow-2xl shadow-orange-950/40"
-              src="https://images.unsplash.com/photo-1579751626657-72bc17010498?auto=format&fit=crop&w=1100&q=85"
-              alt="Fresh pepperoni pizza"
-            />
-            <div className="absolute bottom-7 left-0 rounded-2xl border border-border bg-card p-4 shadow-xl">
-              <p className="text-xs text-muted-foreground">CUSTOMER FAVOURITE</p>
-              <p className="mt-1 font-bold">Classic Pepperoni</p>
-              <p className="text-sm text-orange-400">From ৳650</p>
-            </div>
-          </Reveal>
+        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-5 py-14 sm:py-20 md:grid-cols-2 md:gap-8 md:px-8 lg:py-28">
+          <HeroCopy />
+          <HeroVisual />
         </div>
       </section>
 
+      <div className="overflow-hidden border-b border-border bg-orange-500 text-black">
+        <div className="marquee-track flex w-max py-3 text-xs font-black uppercase tracking-[0.2em] sm:py-3.5 sm:text-sm">
+          {[0, 1].map((copy) => (
+            <span key={copy} className="flex shrink-0 items-center gap-8 pr-8">
+              Fresh dough <span aria-hidden="true">✦</span> Baked to order{" "}
+              <span aria-hidden="true">✦</span> 30-minute delivery{" "}
+              <span aria-hidden="true">✦</span> Made with love{" "}
+              <span aria-hidden="true">✦</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
       <section className="border-b border-border bg-muted/30">
-        <div className="mx-auto max-w-7xl px-5 py-20 md:px-8">
+        <div className="mx-auto max-w-7xl px-5 py-14 sm:py-20 md:px-8">
           <Reveal className="mx-auto max-w-2xl text-center">
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-500">
               The PizzaHub difference
             </p>
-            <h2 className="mt-2 text-3xl font-black sm:text-4xl">Why Choose PizzaHub?</h2>
+            <h2 className="mt-2 text-2xl font-black sm:text-3xl lg:text-4xl">Why Choose PizzaHub?</h2>
             <p className="mt-4 leading-7 text-muted-foreground">
               We put care into every slice — from the ingredients we pick to the moment it
               lands at your door.
             </p>
           </Reveal>
 
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-9 grid gap-6 sm:mt-12 sm:grid-cols-2 lg:grid-cols-4">
             {benefits.map(({ icon: Icon, title, text }, index) => (
               <Reveal key={title} delay={index * 0.07} y={18}>
                 <div className="group h-full rounded-2xl border border-border bg-card p-6 text-center transition hover:-translate-y-1 hover:border-orange-500/50 hover:shadow-lg">
@@ -170,18 +135,18 @@ export default async function HomePage() {
       </section>
 
       <section className="border-b border-border">
-        <div className="mx-auto max-w-7xl px-5 py-20 md:px-8">
+        <div className="mx-auto max-w-7xl px-5 py-14 sm:py-20 md:px-8">
           <Reveal className="mx-auto max-w-2xl text-center">
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-500">
               Simple from start to slice
             </p>
-            <h2 className="mt-2 text-3xl font-black sm:text-4xl">How PizzaHub Works</h2>
+            <h2 className="mt-2 text-2xl font-black sm:text-3xl lg:text-4xl">How PizzaHub Works</h2>
             <p className="mt-4 leading-7 text-muted-foreground">
               Three easy steps stand between you and a hot, fresh pizza.
             </p>
           </Reveal>
 
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
+          <div className="mt-9 grid gap-6 md:mt-12 md:grid-cols-3">
             {steps.map(({ icon: Icon, title, text }, index) => (
               <Reveal key={title} delay={index * 0.09} y={18}>
                 <div className="relative h-full overflow-hidden rounded-2xl border border-border bg-card p-7">
@@ -200,13 +165,13 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+      <section className="mx-auto max-w-7xl px-5 py-14 sm:py-20 md:px-8">
         <Reveal className="mb-8 flex items-end justify-between gap-4">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-500">
               Made for sharing
             </p>
-            <h2 className="mt-2 text-3xl font-black sm:text-4xl">Popular picks</h2>
+            <h2 className="mt-2 text-2xl font-black sm:text-3xl lg:text-4xl">Popular picks</h2>
           </div>
           <Link
             href="/menu"
@@ -220,7 +185,7 @@ export default async function HomePage() {
           {products.length ? (
             <ProductGrid products={products.slice(0, 4)} />
           ) : (
-            <div className="rounded-2xl border border-dashed border-border bg-muted p-10 text-center">
+            <div className="rounded-2xl border border-dashed border-border bg-muted p-8 text-center sm:p-10">
               <p className="text-lg font-bold">Your menu is getting ready.</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 Start the server and run <code className="text-orange-400">npm run seed:data</code>{" "}

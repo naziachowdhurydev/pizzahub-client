@@ -12,7 +12,7 @@ export default async function LoginPage({
 
   return (
     <main className="grid min-h-[75vh] place-items-center bg-background px-5 py-14">
-      <AuthForm mode="login" callbackUrl={callbackUrl} />
+      <AuthForm callbackUrl={callbackUrl} />
     </main>
   );
 }

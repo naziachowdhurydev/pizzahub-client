@@ -496,9 +496,12 @@ function AdminDashboardContent() {
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-      <aside className="h-fit rounded-2xl border border-border bg-card p-3">
-        <nav aria-label="Admin dashboard sections" className="grid gap-1">
+    <div className="grid gap-6 lg:grid-cols-[240px_1fr] lg:gap-8">
+      <aside className="h-fit rounded-2xl border border-border bg-card p-2 lg:p-3">
+        <nav
+          aria-label="Admin dashboard sections"
+          className="flex gap-1 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0"
+        >
           {sections.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -508,7 +511,7 @@ function AdminDashboardContent() {
                 if (id === "analytics") void refreshAnalytics();
               }}
               aria-current={section === id ? "page" : undefined}
-              className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition ${
+              className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition lg:shrink lg:gap-3 lg:px-4 lg:py-3 ${
                 section === id
                   ? "bg-orange-500/10 text-[#F26B4F]"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -1101,7 +1104,7 @@ export default function AdminDashboardPage() {
     <DashboardAccess role="admin">
       <main className="mx-auto min-h-[70vh] max-w-7xl px-5 py-12 md:px-8">
         <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#F26B4F]">Platform control</p>
-        <h1 className="mt-2 text-4xl font-black">Admin dashboard</h1>
+        <h1 className="mt-2 text-3xl font-black sm:text-4xl">Admin dashboard</h1>
         <div className="mt-8">
           <AdminDashboardContent />
         </div>

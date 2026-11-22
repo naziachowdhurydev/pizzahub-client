@@ -5,8 +5,6 @@ const navigation = [
   { href: "/", label: "Home" },
   { href: "/menu", label: "Menu" },
   { href: "/cart", label: "Cart" },
-  { href: "/dashboard/customer", label: "My Orders" },
-  { href: "/dashboard/vendor", label: "Vendor Dashboard" },
   { href: "/profile", label: "My Profile" },
 ];
 

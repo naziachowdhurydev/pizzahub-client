@@ -115,14 +115,14 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 shadow-sm backdrop-blur-xl">
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 md:px-8">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-5 md:h-20 md:px-8">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#F26B4F] text-white shadow-sm">
-            <Pizza size={25} />
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#F26B4F] text-white shadow-sm sm:h-11 sm:w-11">
+            <Pizza size={23} className="sm:h-7 sm:w-7" />
           </span>
 
-          <span className="text-xl font-black tracking-tight text-foreground">
+          <span className="text-lg font-black tracking-tight text-foreground sm:text-xl">
             PIZZA<span className="text-[#F26B4F]">HUB</span>
           </span>
         </Link>
@@ -314,19 +314,12 @@ export function SiteHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <div className="hidden items-center gap-3 md:flex">
+            <div className="hidden md:block">
               <Link
                 href="/login"
-                className="px-3 py-2 text-sm font-semibold text-foreground transition hover:text-[#F26B4F]"
-              >
-                Log in
-              </Link>
-
-              <Link
-                href="/register"
                 className="rounded-xl bg-[#F26B4F] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#D95338]"
               >
-                Get started
+                Log in
               </Link>
             </div>
           )}
@@ -344,7 +337,7 @@ export function SiteHeader() {
 
       {/* Mobile Navigation */}
       {open && (
-        <div className="border-t border-border bg-background px-5 py-5 shadow-lg md:hidden">
+        <div className="max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain border-t border-border bg-background px-4 py-5 shadow-lg sm:px-5 md:hidden">
           <div className="flex flex-col gap-4">
             <ThemeToggle />
             {links.map((link) => (
@@ -402,27 +395,14 @@ export function SiteHeader() {
             </Link>
 
             {!isPending && !user ? (
-              <div className="flex flex-col gap-2 border-t border-border pt-4">
+              <div className="border-t border-border pt-4">
                 <Link
                   href="/login"
                   onClick={() => setOpen(false)}
                   aria-current={isLinkActive("/login") ? "page" : undefined}
-                  className={mobileLinkClass("/login")}
+                  className="block w-fit rounded-xl bg-[#F26B4F] px-5 py-2.5 font-bold text-white"
                 >
                   Log in
-                </Link>
-
-                <Link
-                  href="/register"
-                  onClick={() => setOpen(false)}
-                  aria-current={isLinkActive("/register") ? "page" : undefined}
-                  className={`w-fit rounded-xl px-5 py-2.5 font-bold text-white ${
-                    isLinkActive("/register")
-                      ? "bg-[#D95338] ring-2 ring-[#F26B4F]/40"
-                      : "bg-[#F26B4F]"
-                  }`}
-                >
-                  Create account
                 </Link>
               </div>
             ) : null}
