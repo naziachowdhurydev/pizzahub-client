@@ -10,6 +10,8 @@ import {
   ShoppingBag,
   LogOut,
   LayoutDashboard,
+  Settings,
+  ChevronDown,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -18,6 +20,15 @@ import { dashboardPathForRole } from "@/lib/roles";
 import { useCurrentUser } from "@/lib/use-current-user";
 import { CART_UPDATED_EVENT } from "@/lib/cart-events";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type CartSummary = {
   itemCount: number;
@@ -75,6 +86,7 @@ export function SiteHeader() {
   const handleLogout = async () => {
     await authClient.signOut();
     setOpen(false);
+    toast.success("You have been logged out.");
     window.location.href = "/";
   };
 
@@ -132,9 +144,12 @@ export function SiteHeader() {
           )}
         </nav>
 
-        {/* Desktop Actions */}
-        <div className="hidden items-center gap-3 md:flex">
-          <ThemeToggle />
+        {/* Actions */}
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="hidden md:block">
+            <ThemeToggle />
+          </div>
+
           <Link
             href="/cart"
             aria-label="Shopping cart"
@@ -149,43 +164,125 @@ export function SiteHeader() {
           </Link>
 
           {isPending ? (
-            <span className="text-sm text-muted-foreground">Loading...</span>
+            <span className="hidden text-sm text-muted-foreground md:inline">Loading...</span>
           ) : user ? (
-            <>
-              <Link
-                href="/profile"
-                className="flex items-center gap-2 rounded-full border border-border bg-muted py-1.5 pl-1.5 pr-4 transition hover:border-[#F26B4F]"
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label="Open profile menu"
+                className="group flex min-h-11 items-center gap-2 rounded-full border border-border bg-muted py-1 pl-1 pr-2 transition hover:border-[#F26B4F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F26B4F]/40 sm:pr-3"
               >
                 {displayImage ? (
                   <img
                     src={displayImage}
                     className="h-8 w-8 rounded-full object-cover"
-                    alt="Profile"
+                    alt=""
                   />
                 ) : (
-                  <UserCircle className="h-8 w-8 text-[#F26B4F]" />
-                )}
-
-                <span className="text-sm font-semibold text-foreground">
-                  {displayName}
-                </span>
-                {userRole && (
-                  <span className="rounded-full bg-[#F26B4F]/10 px-2 py-1 text-[10px] font-bold uppercase text-[#F26B4F]">
-                    {userRole}
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-[#F26B4F]/10">
+                    <UserCircle className="h-7 w-7 text-[#F26B4F]" aria-hidden="true" />
                   </span>
                 )}
-              </Link>
-
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-muted-foreground transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                <span className="hidden max-w-28 truncate text-sm font-semibold text-foreground sm:block">
+                  {displayName}
+                </span>
+                <ChevronDown
+                  className="hidden h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[popup-open]:rotate-180 sm:block"
+                  aria-hidden="true"
+                />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                sideOffset={8}
+                className="max-w-[calc(100vw-2rem)] p-2"
+                style={{ width: "17rem", minWidth: 0 }}
               >
-                <LogOut size={17} />
-                Logout
-              </button>
-            </>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="px-2 py-2">
+                    <div className="flex items-center gap-3">
+                      {displayImage ? (
+                        <img
+                          src={displayImage}
+                          className="h-10 w-10 rounded-full object-cover"
+                          alt=""
+                        />
+                      ) : (
+                        <div className="grid h-10 w-10 place-items-center rounded-full bg-[#F26B4F]/10 text-[#F26B4F]">
+                          <UserCircle className="h-6 w-6" aria-hidden="true" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {displayName}
+                        </p>
+                        {user.email ? (
+                          <p className="truncate text-xs font-normal text-muted-foreground">
+                            {user.email}
+                          </p>
+                        ) : null}
+                        {userRole ? (
+                          <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-[#F26B4F]">
+                            {userRole}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </DropdownMenuLabel>
+                </DropdownMenuGroup>
+
+                <DropdownMenuSeparator />
+                <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                  Account
+                </p>
+                <DropdownMenuItem render={<Link href="/profile" />}>
+                  <Settings aria-hidden="true" />
+                  Profile Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem render={<Link href="/cart" />}>
+                  <ShoppingBag aria-hidden="true" />
+                  My Cart
+                  {userRole === "customer" && cartCount > 0 ? (
+                    <span className="ml-auto rounded-full bg-[#F26B4F]/15 px-2 py-0.5 text-[10px] font-bold text-[#F26B4F]">
+                      {cartCount > 99 ? "99+" : cartCount}
+                    </span>
+                  ) : null}
+                </DropdownMenuItem>
+
+                {(dashboardHref || isAdmin) && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                      Workspace
+                    </p>
+                    {dashboardHref && !isAdmin ? (
+                      <DropdownMenuItem render={<Link href={dashboardHref} />}>
+                        <LayoutDashboard aria-hidden="true" />
+                        {dashboardLabel}
+                      </DropdownMenuItem>
+                    ) : null}
+                    {isAdmin ? (
+                      <>
+                        <DropdownMenuItem render={<Link href="/dashboard/admin" />}>
+                          <LayoutDashboard aria-hidden="true" />
+                          Admin Dashboard
+                        </DropdownMenuItem>
+                        <DropdownMenuItem render={<Link href="/dashboard/vendor" />}>
+                          <LayoutDashboard aria-hidden="true" />
+                          Vendor View
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
+                  </>
+                )}
+
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={handleLogout}>
+                  <LogOut aria-hidden="true" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
-            <>
+            <div className="hidden items-center gap-3 md:flex">
               <Link
                 href="/login"
                 className="px-3 py-2 text-sm font-semibold text-foreground transition hover:text-[#F26B4F]"
@@ -199,19 +296,18 @@ export function SiteHeader() {
               >
                 Get started
               </Link>
-            </>
+            </div>
           )}
-        </div>
 
-        {/* Mobile Menu Button */}
-        <button
-          className="rounded-lg p-2 text-foreground transition hover:bg-accent md:hidden"
-          onClick={() => setOpen(!open)}
-          aria-label="Toggle menu"
-          aria-expanded={open}
-        >
-          {open ? <X size={25} /> : <Menu size={25} />}
-        </button>
+          <button
+            className="rounded-lg p-2 text-foreground transition hover:bg-accent md:hidden"
+            onClick={() => setOpen(!open)}
+            aria-label="Toggle menu"
+            aria-expanded={open}
+          >
+            {open ? <X size={25} /> : <Menu size={25} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Navigation */}
@@ -268,47 +364,25 @@ export function SiteHeader() {
               Shopping Cart{user && userRole === "customer" && cartCount > 0 ? ` (${cartCount})` : ""}
             </Link>
 
-            <div className="border-t border-border pt-4">
-              {isPending ? (
-                <p className="text-sm text-muted-foreground">Loading...</p>
-              ) : user ? (
-                <div className="flex flex-col gap-4">
-                  <Link
-                    href="/profile"
-                    onClick={() => setOpen(false)}
-                    className="font-semibold text-foreground"
-                  >
-                    My Profile{userRole ? ` · ${userRole}` : ""}
-                  </Link>
+            {!isPending && !user ? (
+              <div className="flex flex-col gap-3 border-t border-border pt-4">
+                <Link
+                  href="/login"
+                  onClick={() => setOpen(false)}
+                  className="font-semibold text-foreground"
+                >
+                  Log in
+                </Link>
 
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 font-semibold text-red-600"
-                  >
-                    <LogOut size={17} />
-                    Logout
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  <Link
-                    href="/login"
-                    onClick={() => setOpen(false)}
-                    className="font-semibold text-foreground"
-                  >
-                    Log in
-                  </Link>
-
-                  <Link
-                    href="/register"
-                    onClick={() => setOpen(false)}
-                    className="w-fit rounded-xl bg-[#F26B4F] px-5 py-2.5 font-bold text-white"
-                  >
-                    Create account
-                  </Link>
-                </div>
-              )}
-            </div>
+                <Link
+                  href="/register"
+                  onClick={() => setOpen(false)}
+                  className="w-fit rounded-xl bg-[#F26B4F] px-5 py-2.5 font-bold text-white"
+                >
+                  Create account
+                </Link>
+              </div>
+            ) : null}
           </div>
         </div>
       )}
