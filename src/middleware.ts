@@ -25,6 +25,8 @@ export const config = {
     "/admin/:path*",
     "/cart",
     "/checkout",
+    "/payment",
+    "/payment/:path*",
     "/profile/:path*",
   ],
 };

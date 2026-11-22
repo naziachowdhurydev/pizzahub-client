@@ -36,7 +36,9 @@ function isRouteAllowedForRole(pathname: string, role: "customer" | "vendor" | "
       pathname === "/cart" ||
       pathname.startsWith("/cart") ||
       pathname === "/checkout" ||
-      pathname.startsWith("/checkout")
+      pathname.startsWith("/checkout") ||
+      pathname === "/payment" ||
+      pathname.startsWith("/payment")
     );
   }
   return false;

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ShoppingBag, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
@@ -39,6 +40,7 @@ type PlacedOrder = {
 };
 
 function CheckoutContent() {
+  const router = useRouter();
   const [cart, setCart] = useState<CartResponse>({ items: [], subtotal: 0, itemCount: 0 });
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState(false);
@@ -108,7 +110,8 @@ function CheckoutContent() {
       setPlacedOrder(order);
       setCart({ items: [], subtotal: 0, itemCount: 0 });
       notifyCartUpdated();
-      toast.success("Your order was placed successfully.");
+      toast.success("Order created! Proceeding to payment...");
+      router.push(`/payment?orderId=${order._id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not place your order.");
     } finally {

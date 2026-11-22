@@ -174,7 +174,8 @@ export default function CartPage() {
       setPlacedOrder(order);
       setCart(emptyCart);
       notifyCartUpdated();
-      toast.success("Your order was placed successfully.");
+      toast.success("Order created! Proceeding to payment...");
+      router.push(`/payment?orderId=${order._id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not place your order.");
     } finally {

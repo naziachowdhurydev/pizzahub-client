@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Check, Clock3, ShoppingBag, Star } from "lucide-react";
 import { toast } from "sonner";
 import { ProductGrid } from "@/components/product-grid";
@@ -18,6 +19,7 @@ export function ProductDetails({
   product: Product;
   relatedProducts: Product[];
 }) {
+  const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const sessionUser = session?.user;
   const user = sessionUser as
@@ -77,7 +79,8 @@ export function ProductDetails({
       });
       setPlacedOrderId(order._id);
       setShowOrderForm(false);
-      toast.success(`${product.name} ordered successfully.`);
+      toast.success(`${product.name} ordered! Proceeding to payment...`);
+      router.push(`/payment?orderId=${order._id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not place your order.");
     } finally {
