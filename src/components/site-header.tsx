@@ -37,6 +37,8 @@ export function SiteHeader() {
     ? `${userRole[0].toUpperCase()}${userRole.slice(1)} Dashboard`
     : "Dashboard";
   const userId = (user as (typeof user & { id?: string }) | null)?.id;
+  const displayName = currentUser?.name ?? user?.name;
+  const displayImage = currentUser ? currentUser.image : user?.image;
 
   useEffect(() => {
     let active = true;
@@ -154,9 +156,9 @@ export function SiteHeader() {
                 href="/profile"
                 className="flex items-center gap-2 rounded-full border border-border bg-muted py-1.5 pl-1.5 pr-4 transition hover:border-[#F26B4F]"
               >
-                {user.image ? (
+                {displayImage ? (
                   <img
-                    src={user.image}
+                    src={displayImage}
                     className="h-8 w-8 rounded-full object-cover"
                     alt="Profile"
                   />
@@ -165,7 +167,7 @@ export function SiteHeader() {
                 )}
 
                 <span className="text-sm font-semibold text-foreground">
-                  {user.name}
+                  {displayName}
                 </span>
                 {userRole && (
                   <span className="rounded-full bg-[#F26B4F]/10 px-2 py-1 text-[10px] font-bold uppercase text-[#F26B4F]">

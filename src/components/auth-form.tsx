@@ -6,9 +6,21 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { apiFetch, getCurrentUser } from "@/lib/api";
+import { normalizeOptionalImageUrl } from "@/lib/image-url";
 import { dashboardPathForRole } from "@/lib/roles";
 import { useCurrentUser } from "@/lib/use-current-user";
 import { Pizza, Mail, Lock, User, ArrowRight } from "lucide-react";
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+      <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.06H12v3.9h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.24c1.9-1.75 2.98-4.32 2.98-7.36Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.5c-.9.6-2.05.96-3.38.96-2.6 0-4.8-1.76-5.59-4.13H3.08v2.58A10 10 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.84V7.5H3.08a10 10 0 0 0 0 9l3.33-2.58Z" />
+      <path fill="#EA4335" d="M12 6.05c1.47 0 2.8.5 3.84 1.5l2.88-2.88A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.92 5.5l3.33 2.58C7.2 7.8 9.4 6.05 12 6.05Z" />
+    </svg>
+  );
+}
 
 function isRouteAllowedForRole(pathname: string, role: "customer" | "vendor" | "admin"): boolean {
   if (pathname === "/" || pathname.startsWith("/menu") || pathname.startsWith("/profile")) {
@@ -57,10 +69,12 @@ export function AuthForm({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [signupRole, setSignupRole] = useState<"customer" | "vendor">("customer");
   const [storeName, setStoreName] = useState("");
   const [storeDescription, setStoreDescription] = useState("");
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   const isRegister = mode === "register";
 
@@ -71,6 +85,30 @@ export function AuthForm({
     }
   }, [alreadyLoggedInUser, sessionLoading, router]);
 
+  async function signInWithGoogle() {
+    if (googleBusy || busy) return;
+    setGoogleBusy(true);
+    try {
+      const origin = window.location.origin;
+      const result = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: `${origin}/profile`,
+        newUserCallbackURL: `${origin}/profile`,
+        errorCallbackURL: `${origin}${isRegister ? "/register" : "/login"}`,
+      });
+
+      if (result?.error) {
+        throw new Error(result.error.message || "Google sign-in failed.");
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not continue with Google.",
+      );
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
+
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -79,7 +117,10 @@ export function AuthForm({
 
     try {
       if (isRegister) {
-        const image = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`;
+        const customImage = normalizeOptionalImageUrl(imageUrl);
+        const image =
+          customImage ??
+          `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`;
 
         const result = await authClient.signUp.email({
           name,
@@ -205,6 +246,19 @@ export function AuthForm({
         )}
 
         {isRegister && (
+          <label className="block text-sm font-semibold">
+            Profile image URL <span className="font-normal text-muted-foreground">(optional)</span>
+            <input
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 font-normal text-foreground outline-none transition placeholder:text-muted-foreground focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15"
+              placeholder="https://example.com/avatar.jpg"
+            />
+          </label>
+        )}
+
+        {isRegister && (
           <>
             <label className="block text-sm font-semibold">
               I’m here as
@@ -291,7 +345,7 @@ export function AuthForm({
 
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || googleBusy}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#F26B4F] py-3.5 font-bold text-white shadow-lg shadow-[#F26B4F]/15 transition hover:bg-[#E85C40] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {busy ? "Please wait..." : isRegister ? "Create account" : "Log in"}
@@ -299,6 +353,29 @@ export function AuthForm({
           {!busy && <ArrowRight size={18} />}
         </button>
       </form>
+
+      <div className="mt-6">
+        <div className="flex items-center gap-3">
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            or
+          </span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+        <button
+          type="button"
+          onClick={() => void signInWithGoogle()}
+          disabled={busy || googleBusy}
+          className="mt-4 flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-background py-3.5 font-bold text-foreground transition hover:border-[#F26B4F] hover:text-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <GoogleIcon />
+          {googleBusy
+            ? "Connecting..."
+            : isRegister
+              ? "Sign up with Google"
+              : "Continue with Google"}
+        </button>
+      </div>
 
       <div className="my-6 border-t border-border" />
 

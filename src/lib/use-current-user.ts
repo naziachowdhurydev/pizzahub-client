@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { getCurrentUser } from "@/lib/api";
+import { USER_UPDATED_EVENT } from "@/lib/user-events";
 import type { CurrentUser } from "@/types";
 
 type UserLoadResult = {
@@ -47,6 +48,12 @@ export function useCurrentUser() {
   const retry = useCallback(() => {
     setReloadKey((current) => current + 1);
   }, []);
+
+  useEffect(() => {
+    const handleUserUpdate = () => retry();
+    window.addEventListener(USER_UPDATED_EVENT, handleUserUpdate);
+    return () => window.removeEventListener(USER_UPDATED_EVENT, handleUserUpdate);
+  }, [retry]);
 
   const currentResult =
     loadResult &&
