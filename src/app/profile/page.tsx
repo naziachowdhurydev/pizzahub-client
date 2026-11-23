@@ -7,6 +7,7 @@ import { normalizeOptionalImageUrl } from "@/lib/image-url";
 import { notifyUserUpdated } from "@/lib/user-events";
 import { toast } from "sonner";
 import { CalendarDays, Pencil, Save, ShieldCheck, UserRound } from "lucide-react";
+import { AvatarInput } from "@/components/avatar-input";
 import { ProfileSkeleton } from "@/components/skeletons";
 import type { CurrentUserProfile } from "@/types";
 
@@ -134,21 +135,18 @@ export default function ProfilePage() {
             />
           </label>
 
-          <label className="block text-sm font-semibold sm:col-span-2">
-            Image URL{" "}
-            <span className="font-normal text-muted-foreground">
-              (optional — paste an image link such as an ImgBB URL; leave blank to
-              remove your photo)
-            </span>
-            <input
-              type="url"
-              value={imageUrl}
+          <fieldset disabled={!editing || saving} className="sm:col-span-2">
+            <legend className="text-sm font-semibold">Profile image</legend>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Optional. Upload an image or paste a link. Leave it empty to remove your photo.
+            </p>
+            <AvatarInput
+              id="profile-avatar"
+              value={imageUrl || null}
+              onChange={(value) => setImageUrl(value ?? "")}
               disabled={!editing || saving}
-              onChange={(event) => setImageUrl(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 font-normal text-foreground outline-none transition focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15 disabled:cursor-not-allowed disabled:opacity-70"
-              placeholder="https://example.com/avatar.jpg"
             />
-          </label>
+          </fieldset>
 
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
             <button

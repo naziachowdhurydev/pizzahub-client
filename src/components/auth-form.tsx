@@ -4,9 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { AvatarInput } from "@/components/avatar-input";
 import { authClient } from "@/lib/auth-client";
 import { getCurrentUser } from "@/lib/api";
-import { dashboardPathForRole } from "@/lib/roles";
+import {
+  dashboardPathForRole,
+  isRouteAllowedForRole,
+  safeRelativePath,
+} from "@/lib/roles";
 import { useCurrentUser } from "@/lib/use-current-user";
 import { Pizza, Mail, Lock, ArrowRight, UserRound, Store, Eye, EyeOff } from "lucide-react";
 
@@ -46,40 +51,6 @@ function PasswordVisibilityToggle({
   );
 }
 
-function isRouteAllowedForRole(pathname: string, role: "customer" | "vendor" | "admin"): boolean {
-  if (pathname === "/" || pathname.startsWith("/menu") || pathname.startsWith("/profile")) {
-    return true;
-  }
-  if (role === "admin") {
-    return true;
-  }
-  if (role === "vendor") {
-    if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard/admin")) {
-      return false;
-    }
-    return pathname.startsWith("/dashboard/vendor");
-  }
-  if (role === "customer") {
-    if (
-      pathname.startsWith("/admin") ||
-      pathname.startsWith("/dashboard/admin") ||
-      pathname.startsWith("/dashboard/vendor")
-    ) {
-      return false;
-    }
-    return (
-      pathname.startsWith("/dashboard/customer") ||
-      pathname === "/cart" ||
-      pathname.startsWith("/cart") ||
-      pathname === "/checkout" ||
-      pathname.startsWith("/checkout") ||
-      pathname === "/payment" ||
-      pathname.startsWith("/payment")
-    );
-  }
-  return false;
-}
-
 export function AuthForm({
   callbackUrl,
   mode = "login",
@@ -98,6 +69,7 @@ export function AuthForm({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [role, setRole] = useState<AccountRole>("customer");
+  const [image, setImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
 
@@ -108,16 +80,26 @@ export function AuthForm({
     }
   }, [alreadyLoggedInUser, sessionLoading, router]);
 
+  useEffect(() => {
+    const error = new URLSearchParams(window.location.search).get("error");
+    if (error === "google") {
+      toast.error("Google sign-in was cancelled or could not be completed.");
+    }
+  }, []);
+
   async function signInWithGoogle() {
     if (googleBusy || busy) return;
     setGoogleBusy(true);
     try {
       const origin = window.location.origin;
+      const next = safeRelativePath(callbackUrl);
+      const destination = `${origin}/auth/google${next ? `?next=${encodeURIComponent(next)}` : ""}`;
+
       const result = await authClient.signIn.social({
         provider: "google",
-        callbackURL: `${origin}/profile`,
-        newUserCallbackURL: `${origin}/profile`,
-        errorCallbackURL: `${origin}/login`,
+        callbackURL: destination,
+        newUserCallbackURL: destination,
+        errorCallbackURL: `${origin}/login?error=google`,
       });
 
       if (result?.error) {
@@ -152,6 +134,7 @@ export function AuthForm({
           name: name.trim(),
           email: email.trim(),
           password,
+          image: image ?? undefined,
           role,
         } as Parameters<typeof authClient.signUp.email>[0]);
 
@@ -380,6 +363,21 @@ export function AuthForm({
           </div>
         )}
 
+        {isSignup && (
+          <fieldset disabled={busy}>
+            <legend className="text-sm font-semibold">Profile photo</legend>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Optional. Upload an image or paste a link — it is saved with your account.
+            </p>
+            <AvatarInput
+              id="signup-avatar"
+              value={image}
+              onChange={setImage}
+              disabled={busy}
+            />
+          </fieldset>
+        )}
+
         <button
           type="submit"
           disabled={busy || googleBusy}
@@ -390,26 +388,27 @@ export function AuthForm({
         </button>
       </form>
 
-      {!isSignup && (
-        <div className="mt-6">
-          <div className="flex items-center gap-3">
-            <span className="h-px flex-1 bg-border" />
-            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              or
-            </span>
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <button
-            type="button"
-            onClick={() => void signInWithGoogle()}
-            disabled={busy || googleBusy}
-            className="mt-4 flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-background py-3.5 font-bold text-foreground transition hover:border-[#F26B4F] hover:text-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <GoogleIcon />
-            {googleBusy ? "Connecting..." : "Continue with Google"}
-          </button>
+      <div className="mt-6">
+        <div className="flex items-center gap-3">
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            or
+          </span>
+          <span className="h-px flex-1 bg-border" />
         </div>
-      )}
+        <button
+          type="button"
+          onClick={() => void signInWithGoogle()}
+          disabled={busy || googleBusy}
+          className="mt-4 flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-background py-3.5 font-bold text-foreground transition hover:border-[#F26B4F] hover:text-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <GoogleIcon />
+          {googleBusy ? "Connecting..." : "Continue with Google"}
+        </button>
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          New to PizzaHub? Google will create your account automatically.
+        </p>
+      </div>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         {isSignup ? "Already have an account? " : "New to PizzaHub? "}
