@@ -47,3 +47,6 @@ The customer-facing frontend for **PizzaHub**, a dark-themed pizza ordering app.
 - The starter intentionally uses plain `<img>` tags in a few places; ESLint reports `no-img-element` warnings for them. There are no lint errors.
 - Animation effects honour `prefers-reduced-motion`.
 - This is a runnable foundation, not a finished commercial payment system. Image upload storage, production refresh-token strategy, and advanced order workflows should be added before launch.
+
+
+Live link - https://pizzahub-client-ten-silk.vercel.app
