@@ -7,7 +7,8 @@ import { jwtClient } from "better-auth/client/plugins";
 const authOrigin =
   typeof window !== "undefined"
     ? window.location.origin
-    : process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    : process.env.NEXT_PUBLIC_SITE_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
 export const authClient = createAuthClient({
   baseURL: `${authOrigin}/api/auth`,

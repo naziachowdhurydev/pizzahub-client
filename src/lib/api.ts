@@ -1,23 +1,37 @@
 import type { CurrentUserProfile, Product } from "@/types";
 import { isUserRole } from "@/lib/roles";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+/**
+ * Browser requests go through this app's same-origin backend proxy.
+ * Server components can call the API deployment directly using the
+ * server-only AUTH_BACKEND_URL variable.
+ */
+const PUBLIC_API_BASE = (process.env.NEXT_PUBLIC_API_URL || "/api/backend").replace(/\/+$/, "");
+
+function resolveApiUrl(path: string): string {
+  if (typeof window !== "undefined") return `${PUBLIC_API_BASE}${path}`;
+
+  const backend = process.env.AUTH_BACKEND_URL;
+  if (backend) return `${backend.replace(/\/+$/, "")}/api${path}`;
+
+  const origin = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
+  return `${origin}${PUBLIC_API_BASE}${path}`;
+}
 
 export async function getProducts(): Promise<Product[]> {
-  const response = await fetch(`${API_URL}/products`, { cache: "no-store" });
+  const response = await fetch(resolveApiUrl("/products"), { cache: "no-store" });
   if (!response.ok) throw new Error("Failed to load products");
   const result = await response.json();
   return result.data as Product[];
 }
 
 async function requestProduct(slug: string, token: string): Promise<Product | null> {
-  const response = await fetch(
-    `${API_URL}/products/${encodeURIComponent(slug)}`,
-    {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  );
+  const response = await fetch(resolveApiUrl(`/products/${encodeURIComponent(slug)}`), {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error("Failed to load product details");
   const result = await response.json();
@@ -37,7 +51,7 @@ export async function getAuthenticatedProduct(slug: string): Promise<Product | n
 
 export async function getAuthenticatedProducts(): Promise<Product[]> {
   const token = await getJwtToken();
-  const response = await fetch(`${API_URL}/products`, {
+  const response = await fetch(resolveApiUrl("/products"), {
     cache: "no-store",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -49,7 +63,7 @@ export async function getAuthenticatedProducts(): Promise<Product[]> {
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await getJwtToken();
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(resolveApiUrl(path), {
     ...options,
     headers: {
       "Content-Type": "application/json",
