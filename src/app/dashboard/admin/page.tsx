@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { BarChart3, Bell, ClipboardList, LifeBuoy, Package, RefreshCw, Store, Users } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardAccess } from "@/components/dashboard-access";
+import { DashboardSkeleton, ListSkeleton } from "@/components/skeletons";
 import { apiFetch } from "@/lib/api";
 import { formatOrderStatus } from "@/lib/order-status";
 import { useCurrentUser } from "@/lib/use-current-user";
@@ -492,7 +493,7 @@ function AdminDashboardContent() {
   );
 
   if (loading) {
-    return <p className="py-16 text-center text-muted-foreground">Loading platform dashboard...</p>;
+    return <DashboardSkeleton label="Loading platform dashboard..." />;
   }
 
   return (
@@ -900,7 +901,7 @@ function AdminDashboardContent() {
               </label>
             </div>
             {issuesLoading ? (
-              <p className="mt-6 text-muted-foreground">Loading order issues...</p>
+              <ListSkeleton label="Loading order issues..." />
             ) : filteredOrderIssues.length === 0 ? (
               <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
                 No order requests match this filter.

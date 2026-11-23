@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ShoppingBag, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardAccess } from "@/components/dashboard-access";
+import { CheckoutSkeleton } from "@/components/skeletons";
 import { apiFetch } from "@/lib/api";
 import { notifyCartUpdated } from "@/lib/cart-events";
 import { todayForDateInput, validateDeliveryDate } from "@/lib/delivery-date";
@@ -130,11 +131,7 @@ function CheckoutContent() {
   }
 
   if (loading) {
-    return (
-      <main className="mx-auto grid min-h-[65vh] max-w-7xl place-items-center px-5 text-muted-foreground">
-        Loading checkout...
-      </main>
-    );
+    return <CheckoutSkeleton />;
   }
 
   if (placedOrder) {

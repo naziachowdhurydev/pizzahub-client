@@ -7,6 +7,7 @@ import { BarChart3, ClipboardList, Package, RefreshCw, Sparkles, Store } from "l
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DashboardAccess } from "@/components/dashboard-access";
+import { DashboardSkeleton } from "@/components/skeletons";
 import { apiFetch } from "@/lib/api";
 import { formatOrderStatus } from "@/lib/order-status";
 import type { Product } from "@/types";
@@ -368,7 +369,7 @@ function VendorDashboardContent() {
   );
 
   if (loading) {
-    return <p className="py-16 text-center text-muted-foreground">Loading your store...</p>;
+    return <DashboardSkeleton label="Loading your store..." />;
   }
 
   return (

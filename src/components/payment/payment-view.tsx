@@ -15,6 +15,7 @@ import {
   Pizza,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CheckoutSkeleton } from "@/components/skeletons";
 import { apiFetch } from "@/lib/api";
 import { PaymentMethods } from "./payment-methods";
 import { OrderSummaryCard } from "./order-summary-card";
@@ -138,11 +139,7 @@ export function PaymentView({ orderIds }: { orderIds?: string[] }) {
   }
 
   if (loading) {
-    return (
-      <main className="mx-auto grid min-h-[65vh] max-w-7xl place-items-center px-5 text-muted-foreground">
-        Loading payment details...
-      </main>
-    );
+    return <CheckoutSkeleton label="Loading payment details..." />;
   }
 
   return (

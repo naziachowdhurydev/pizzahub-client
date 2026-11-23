@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { LoaderCircle, Package, Star, Tags, Utensils } from "lucide-react";
+import { Package, Star, Tags, Utensils } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DashboardAccess } from "@/components/dashboard-access";
+import { DashboardSkeleton } from "@/components/skeletons";
 import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import type { Product } from "@/types";
@@ -189,14 +190,7 @@ function AdminPageContent() {
   }
 
   if (sessionPending || (isAdmin && loading)) {
-    return (
-      <main className="mx-auto flex min-h-[65vh] max-w-7xl items-center justify-center px-5">
-        <p className="flex items-center gap-3 text-muted-foreground">
-          <LoaderCircle className="animate-spin" size={20} />
-          Loading dashboard...
-        </p>
-      </main>
-    );
+    return <DashboardSkeleton label="Loading admin dashboard..." />;
   }
 
   if (!user) {

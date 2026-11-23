@@ -256,12 +256,12 @@ export function AuthForm({
         {isSignup && (
           <fieldset>
             <legend className="text-sm font-semibold">I want to</legend>
-            <div className="mt-2 grid grid-cols-2 gap-3">
+            <div className="mt-2 flex gap-1 rounded-xl border border-border bg-muted p-1">
               <label
-                className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border p-3 text-center transition ${
+                className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition-all ${
                   role === "customer"
-                    ? "border-[#F26B4F] bg-orange-500/10 text-[#F26B4F]"
-                    : "border-border hover:border-[#F26B4F]/50"
+                    ? "bg-[#F26B4F] text-white shadow-sm"
+                    : "text-muted-foreground hover:bg-background hover:text-foreground"
                 }`}
               >
                 <input
@@ -272,16 +272,15 @@ export function AuthForm({
                   onChange={() => setRole("customer")}
                   className="sr-only"
                 />
-                <UserRound size={20} aria-hidden="true" />
-                <span className="text-sm font-bold">Order food</span>
-                <span className="text-[11px] font-medium text-muted-foreground">Customer</span>
+                <UserRound size={18} aria-hidden="true" />
+                Customer
               </label>
 
               <label
-                className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border p-3 text-center transition ${
+                className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition-all ${
                   role === "vendor"
-                    ? "border-[#F26B4F] bg-orange-500/10 text-[#F26B4F]"
-                    : "border-border hover:border-[#F26B4F]/50"
+                    ? "bg-[#F26B4F] text-white shadow-sm"
+                    : "text-muted-foreground hover:bg-background hover:text-foreground"
                 }`}
               >
                 <input
@@ -292,11 +291,15 @@ export function AuthForm({
                   onChange={() => setRole("vendor")}
                   className="sr-only"
                 />
-                <Store size={20} aria-hidden="true" />
-                <span className="text-sm font-bold">Sell food</span>
-                <span className="text-[11px] font-medium text-muted-foreground">Vendor</span>
+                <Store size={18} aria-hidden="true" />
+                Vendor
               </label>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {role === "customer"
+                ? "You’ll browse and order pizzas."
+                : "You’ll manage a store, products and orders."}
+            </p>
           </fieldset>
         )}
 

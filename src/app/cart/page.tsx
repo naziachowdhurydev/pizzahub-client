@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { CartSkeleton } from "@/components/skeletons";
 import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { notifyCartUpdated } from "@/lib/cart-events";
@@ -191,11 +192,7 @@ export default function CartPage() {
   }
 
   if (sessionPending) {
-    return (
-      <main className="mx-auto grid min-h-[65vh] max-w-7xl place-items-center px-5 text-muted-foreground">
-        Loading your cart...
-      </main>
-    );
+    return <CartSkeleton />;
   }
 
   if (!user) {
@@ -227,11 +224,7 @@ export default function CartPage() {
   }
 
   if (loading) {
-    return (
-      <main className="mx-auto grid min-h-[65vh] max-w-7xl place-items-center px-5 text-muted-foreground">
-        Loading your cart...
-      </main>
-    );
+    return <CartSkeleton />;
   }
 
   return (

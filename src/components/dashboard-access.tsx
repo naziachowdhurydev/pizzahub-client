@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { DashboardSkeleton } from "@/components/skeletons";
 import { dashboardPathForRole } from "@/lib/roles";
 import { useCurrentUser } from "@/lib/use-current-user";
 
@@ -28,11 +29,7 @@ export function DashboardAccess({
   }, [loading, user, pathname, router]);
 
   if (loading) {
-    return (
-      <main className="mx-auto grid min-h-[65vh] max-w-7xl place-items-center px-5 text-muted-foreground">
-        Loading your dashboard...
-      </main>
-    );
+    return <DashboardSkeleton label="Verifying your dashboard access..." />;
   }
 
   if (error) {

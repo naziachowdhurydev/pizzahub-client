@@ -7,6 +7,7 @@ import { normalizeOptionalImageUrl } from "@/lib/image-url";
 import { notifyUserUpdated } from "@/lib/user-events";
 import { toast } from "sonner";
 import { CalendarDays, Pencil, Save, ShieldCheck, UserRound } from "lucide-react";
+import { ProfileSkeleton } from "@/components/skeletons";
 import type { CurrentUserProfile } from "@/types";
 
 export default function ProfilePage() {
@@ -71,11 +72,7 @@ export default function ProfilePage() {
   }
 
   if (loading) {
-    return (
-      <main className="mx-auto max-w-4xl px-5 py-20 text-muted-foreground">
-        Loading profile...
-      </main>
-    );
+    return <ProfileSkeleton />;
   }
 
   if (!profile) {

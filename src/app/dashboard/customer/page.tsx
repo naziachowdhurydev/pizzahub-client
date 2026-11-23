@@ -6,6 +6,7 @@ import { Bell, CircleX, Heart, LifeBuoy, MapPin, PackageCheck, RefreshCw, UserRo
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DashboardAccess } from "@/components/dashboard-access";
+import { DashboardSkeleton, ListSkeleton } from "@/components/skeletons";
 import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { formatOrderStatus } from "@/lib/order-status";
@@ -416,7 +417,7 @@ function CustomerDashboardContent() {
   }
 
   if (loading) {
-    return <p className="py-16 text-center text-muted-foreground">Loading your dashboard...</p>;
+    return <DashboardSkeleton label="Loading your dashboard..." />;
   }
 
   return (
@@ -765,7 +766,7 @@ function CustomerDashboardContent() {
               Track complaints, cancellation requests and refund requests.
             </p>
             {supportLoading ? (
-              <p className="mt-6 text-muted-foreground">Loading support requests...</p>
+              <ListSkeleton label="Loading support requests..." />
             ) : supportRequests.length === 0 ? (
               <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
                 You have no support requests.
