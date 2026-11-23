@@ -8,7 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { getCurrentUser } from "@/lib/api";
 import { dashboardPathForRole } from "@/lib/roles";
 import { useCurrentUser } from "@/lib/use-current-user";
-import { Pizza, Mail, Lock, ArrowRight, UserRound, Store } from "lucide-react";
+import { Pizza, Mail, Lock, ArrowRight, UserRound, Store, Eye, EyeOff } from "lucide-react";
 
 type AccountRole = "customer" | "vendor";
 type AuthMode = "login" | "signup";
@@ -21,6 +21,28 @@ function GoogleIcon() {
       <path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.84V7.5H3.08a10 10 0 0 0 0 9l3.33-2.58Z" />
       <path fill="#EA4335" d="M12 6.05c1.47 0 2.8.5 3.84 1.5l2.88-2.88A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.92 5.5l3.33 2.58C7.2 7.8 9.4 6.05 12 6.05Z" />
     </svg>
+  );
+}
+
+function PasswordVisibilityToggle({
+  visible,
+  onClick,
+  label,
+}: {
+  visible: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={visible}
+      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-[#F26B4F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F26B4F]/40"
+    >
+      {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+    </button>
   );
 }
 
@@ -72,6 +94,9 @@ export function AuthForm({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [role, setRole] = useState<AccountRole>("customer");
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
@@ -107,6 +132,18 @@ export function AuthForm({
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (isSignup) {
+      if (password.length < 8) {
+        toast.error("Password must be at least 8 characters.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        toast.error("Passwords do not match. Please try again.");
+        return;
+      }
+    }
+
     setBusy(true);
 
     try {
@@ -124,6 +161,7 @@ export function AuthForm({
 
         // Profile, session and role all come from the server after sign-up.
         const { user } = await getCurrentUser();
+        toast.success("Account created successfully! Redirecting to your dashboard...");
         router.push(dashboardPathForRole(user.role));
         router.refresh();
         return;
@@ -153,6 +191,7 @@ export function AuthForm({
         }
       }
 
+      toast.success("Logged in successfully. Redirecting...");
       router.push(targetUrl);
       router.refresh();
     } catch (error) {
@@ -165,6 +204,9 @@ export function AuthForm({
 
   const inputClass =
     "mt-2 w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base text-foreground outline-none transition placeholder:text-muted-foreground focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15";
+
+  const passwordInputClass =
+    "mt-2 w-full rounded-xl border border-border bg-background py-3 pl-11 pr-12 text-base text-foreground outline-none transition placeholder:text-muted-foreground focus:border-[#F26B4F] focus:ring-2 focus:ring-[#F26B4F]/15";
 
   return (
     <section className="w-full max-w-md rounded-3xl border border-border bg-card p-6 text-card-foreground shadow-xl sm:p-9">
@@ -277,25 +319,63 @@ export function AuthForm({
           </div>
         </label>
 
-        <label className="block text-sm font-semibold">
-          Password
+        <div>
+          <label htmlFor="auth-password" className="block text-sm font-semibold">
+            Password
+          </label>
           <div className="relative">
             <Lock
               size={18}
               className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
             />
             <input
+              id="auth-password"
               required
               minLength={8}
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete={isSignup ? "new-password" : "current-password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className={inputClass}
+              className={passwordInputClass}
               placeholder="At least 8 characters"
             />
+            <PasswordVisibilityToggle
+              visible={showPassword}
+              onClick={() => setShowPassword((current) => !current)}
+              label={showPassword ? "Hide password" : "Show password"}
+            />
           </div>
-        </label>
+        </div>
+
+        {isSignup && (
+          <div>
+            <label htmlFor="auth-confirm-password" className="block text-sm font-semibold">
+              Confirm password
+            </label>
+            <div className="relative">
+              <Lock
+                size={18}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                id="auth-confirm-password"
+                required
+                minLength={8}
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={passwordInputClass}
+                placeholder="Re-enter your password"
+              />
+              <PasswordVisibilityToggle
+                visible={showConfirmPassword}
+                onClick={() => setShowConfirmPassword((current) => !current)}
+                label={showConfirmPassword ? "Hide confirmation" : "Show confirmation"}
+              />
+            </div>
+          </div>
+        )}
 
         <button
           type="submit"
