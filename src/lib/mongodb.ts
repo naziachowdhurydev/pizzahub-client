@@ -18,9 +18,10 @@ export function getMongoClientPromise(): Promise<MongoClient> {
 
   const client = new MongoClient(getUri());
   const promise = client.connect();
-  if (process.env.NODE_ENV !== "production") {
-    globalForMongo._mongoClientPromise = promise;
-  }
+  globalForMongo._mongoClientPromise = promise;
+  promise.catch(() => {
+    globalForMongo._mongoClientPromise = undefined;
+  });
   return promise;
 }
 
