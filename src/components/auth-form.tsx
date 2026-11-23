@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { getCurrentUser } from "@/lib/api";
 import { dashboardPathForRole } from "@/lib/roles";
 import { useCurrentUser } from "@/lib/use-current-user";
-import { Pizza, Mail, Lock, ArrowRight } from "lucide-react";
+import { Pizza, Mail, Lock, ArrowRight, UserRound, Store } from "lucide-react";
+
+type AccountRole = "customer" | "vendor";
+type AuthMode = "login" | "signup";
 
 function GoogleIcon() {
   return (
@@ -54,16 +58,25 @@ function isRouteAllowedForRole(pathname: string, role: "customer" | "vendor" | "
   return false;
 }
 
-export function AuthForm({ callbackUrl }: { callbackUrl?: string }) {
+export function AuthForm({
+  callbackUrl,
+  mode = "login",
+}: {
+  callbackUrl?: string;
+  mode?: AuthMode;
+}) {
   const router = useRouter();
+  const isSignup = mode === "signup";
   const { user: alreadyLoggedInUser, loading: sessionLoading } = useCurrentUser();
 
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<AccountRole>("customer");
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
 
-  // If user is already logged in, redirect them away from login to their dashboard
+  // If user is already logged in, redirect them away from auth pages.
   useEffect(() => {
     if (!sessionLoading && alreadyLoggedInUser) {
       router.replace(dashboardPathForRole(alreadyLoggedInUser.role));
@@ -86,9 +99,7 @@ export function AuthForm({ callbackUrl }: { callbackUrl?: string }) {
         throw new Error(result.error.message || "Google sign-in failed.");
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not continue with Google.",
-      );
+      toast.error(error instanceof Error ? error.message : "Could not continue with Google.");
     } finally {
       setGoogleBusy(false);
     }
@@ -97,9 +108,27 @@ export function AuthForm({ callbackUrl }: { callbackUrl?: string }) {
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
-    let signedIn = false;
 
     try {
+      if (isSignup) {
+        const result = await authClient.signUp.email({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          role,
+        } as Parameters<typeof authClient.signUp.email>[0]);
+
+        if (result.error) {
+          throw new Error(result.error.message || "Sign up failed");
+        }
+
+        // Profile, session and role all come from the server after sign-up.
+        const { user } = await getCurrentUser();
+        router.push(dashboardPathForRole(user.role));
+        router.refresh();
+        return;
+      }
+
       const result = await authClient.signIn.email({
         email,
         password,
@@ -109,10 +138,8 @@ export function AuthForm({ callbackUrl }: { callbackUrl?: string }) {
         throw new Error(result.error.message || "Login failed");
       }
 
-      signedIn = true;
       const { user } = await getCurrentUser();
 
-      // Check whether destination callbackUrl is permitted for user's actual database role
       let targetUrl = dashboardPathForRole(user.role);
       if (
         callbackUrl &&
@@ -130,11 +157,7 @@ export function AuthForm({ callbackUrl }: { callbackUrl?: string }) {
       router.refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Something went wrong";
-      toast.error(
-        signedIn
-          ? `You were signed in, but we couldn't load your account role: ${message}`
-          : message,
-      );
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -154,14 +177,87 @@ export function AuthForm({ callbackUrl }: { callbackUrl?: string }) {
           PizzaHub Account
         </p>
 
-        <h1 className="mt-3 text-3xl font-black tracking-tight">Welcome back!</h1>
+        <h1 className="mt-3 text-3xl font-black tracking-tight">
+          {isSignup ? "Create your account" : "Welcome back!"}
+        </h1>
 
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Log in and we’ll take you to the dashboard assigned to your account.
+          {isSignup
+            ? "Choose how you want to use PizzaHub and get started in seconds."
+            : "Log in and we’ll take you to the dashboard assigned to your account."}
         </p>
       </div>
 
       <form onSubmit={submit} className="space-y-5">
+        {isSignup && (
+          <label className="block text-sm font-semibold">
+            Full name
+            <div className="relative">
+              <UserRound
+                size={18}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                required
+                minLength={2}
+                type="text"
+                autoComplete="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={inputClass}
+                placeholder="Your name"
+              />
+            </div>
+          </label>
+        )}
+
+        {isSignup && (
+          <fieldset>
+            <legend className="text-sm font-semibold">I want to</legend>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <label
+                className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border p-3 text-center transition ${
+                  role === "customer"
+                    ? "border-[#F26B4F] bg-orange-500/10 text-[#F26B4F]"
+                    : "border-border hover:border-[#F26B4F]/50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="role"
+                  value="customer"
+                  checked={role === "customer"}
+                  onChange={() => setRole("customer")}
+                  className="sr-only"
+                />
+                <UserRound size={20} aria-hidden="true" />
+                <span className="text-sm font-bold">Order food</span>
+                <span className="text-[11px] font-medium text-muted-foreground">Customer</span>
+              </label>
+
+              <label
+                className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border p-3 text-center transition ${
+                  role === "vendor"
+                    ? "border-[#F26B4F] bg-orange-500/10 text-[#F26B4F]"
+                    : "border-border hover:border-[#F26B4F]/50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="role"
+                  value="vendor"
+                  checked={role === "vendor"}
+                  onChange={() => setRole("vendor")}
+                  className="sr-only"
+                />
+                <Store size={20} aria-hidden="true" />
+                <span className="text-sm font-bold">Sell food</span>
+                <span className="text-[11px] font-medium text-muted-foreground">Vendor</span>
+              </label>
+            </div>
+          </fieldset>
+        )}
+
         <label className="block text-sm font-semibold">
           Email address
           <div className="relative">
@@ -172,6 +268,7 @@ export function AuthForm({ callbackUrl }: { callbackUrl?: string }) {
             <input
               required
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={inputClass}
@@ -191,6 +288,7 @@ export function AuthForm({ callbackUrl }: { callbackUrl?: string }) {
               required
               minLength={8}
               type="password"
+              autoComplete={isSignup ? "new-password" : "current-password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className={inputClass}
@@ -204,29 +302,47 @@ export function AuthForm({ callbackUrl }: { callbackUrl?: string }) {
           disabled={busy || googleBusy}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#F26B4F] py-3.5 font-bold text-white shadow-lg shadow-[#F26B4F]/15 transition hover:bg-[#E85C40] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {busy ? "Please wait..." : "Log in"}
+          {busy ? "Please wait..." : isSignup ? "Create account" : "Log in"}
           {!busy && <ArrowRight size={18} />}
         </button>
       </form>
 
-      <div className="mt-6">
-        <div className="flex items-center gap-3">
-          <span className="h-px flex-1 bg-border" />
-          <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            or
-          </span>
-          <span className="h-px flex-1 bg-border" />
+      {!isSignup && (
+        <div className="mt-6">
+          <div className="flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              or
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <button
+            type="button"
+            onClick={() => void signInWithGoogle()}
+            disabled={busy || googleBusy}
+            className="mt-4 flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-background py-3.5 font-bold text-foreground transition hover:border-[#F26B4F] hover:text-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <GoogleIcon />
+            {googleBusy ? "Connecting..." : "Continue with Google"}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => void signInWithGoogle()}
-          disabled={busy || googleBusy}
-          className="mt-4 flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-background py-3.5 font-bold text-foreground transition hover:border-[#F26B4F] hover:text-[#F26B4F] disabled:cursor-not-allowed disabled:opacity-60"
+      )}
+
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        {isSignup ? "Already have an account? " : "New to PizzaHub? "}
+        <Link
+          href={isSignup ? "/login" : "/signup"}
+          className="font-bold text-[#F26B4F] hover:underline"
         >
-          <GoogleIcon />
-          {googleBusy ? "Connecting..." : "Continue with Google"}
-        </button>
-      </div>
+          {isSignup ? "Log in" : "Sign up"}
+        </Link>
+      </p>
+
+      {isSignup && (
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          Vendors can add products and manage orders right away. Admin accounts are assigned separately.
+        </p>
+      )}
     </section>
   );
 }

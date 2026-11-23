@@ -314,12 +314,18 @@ export function SiteHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <div className="hidden md:block">
+            <div className="hidden items-center gap-2 md:flex">
               <Link
                 href="/login"
-                className="rounded-xl bg-[#F26B4F] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#D95338]"
+                className="rounded-xl px-4 py-2.5 text-sm font-bold text-muted-foreground transition hover:bg-accent hover:text-[#F26B4F]"
               >
                 Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-xl bg-[#F26B4F] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#D95338]"
+              >
+                Sign up
               </Link>
             </div>
           )}
@@ -395,14 +401,22 @@ export function SiteHeader() {
             </Link>
 
             {!isPending && !user ? (
-              <div className="border-t border-border pt-4">
+              <div className="flex flex-col gap-3 border-t border-border pt-4">
                 <Link
                   href="/login"
                   onClick={() => setOpen(false)}
                   aria-current={isLinkActive("/login") ? "page" : undefined}
-                  className="block w-fit rounded-xl bg-[#F26B4F] px-5 py-2.5 font-bold text-white"
+                  className={mobileLinkClass("/login")}
                 >
                   Log in
+                </Link>
+                <Link
+                  href="/signup"
+                  onClick={() => setOpen(false)}
+                  aria-current={isLinkActive("/signup") ? "page" : undefined}
+                  className="block rounded-xl bg-[#F26B4F] px-5 py-2.5 text-center font-bold text-white"
+                >
+                  Sign up
                 </Link>
               </div>
             ) : null}
